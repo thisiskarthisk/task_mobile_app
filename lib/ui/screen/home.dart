@@ -1,6 +1,7 @@
 // lib/ui/screen/home.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_tms/ui/screen/auth/login.dart';
+import 'package:flutter_tms/ui/screen/notifications.dart';
 import 'cases.dart'; // Import CasesScreen
 
 class HomeScreen extends StatefulWidget {
@@ -16,6 +17,70 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isCompanyInfoVisible = false; // State to control visibility of horizontal card
+
+  // Logout Confirm Modal
+  void _showLogoutConfirmationDialog(){
+    showDialog(
+        context: context,
+        builder: (BuildContext context){
+          return AlertDialog(
+              title: Text("Confirm Logout"),
+              content: Text("Are you sure you want to log out?"),
+              actions:<Widget> [
+                TextButton(
+                    child:Text("No"),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                ),
+                TextButton(
+                  child:Text("Yes"),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (context) => LoginScreen())
+                    );
+                  },
+                )
+              ],
+          );
+        }
+    );
+  }
+
+
+  // Function to show the notifications screen as a bottom sheet with animation
+  void _showNotificationsScreen() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.3,
+          maxChildSize: 0.9,
+          builder: (context, scrollController) {
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20.0)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black26,
+                    blurRadius: 10.0,
+                    offset: Offset(0, -5),
+                  ),
+                ],
+              ),
+              child: NotificationsScreen(), // Replace with your NotificationsScreen content
+            );
+          },
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,16 +116,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 IconButton(
                   color: Colors.white,
                   icon: Icon(Icons.notifications), // Notification icon
-                  onPressed: () {
-                    // Add your notification functionality here
-                  },
+                  onPressed: _showNotificationsScreen,
                 ),
                 IconButton(
                   color: Colors.white,
                   icon: Icon(Icons.power_settings_new), // Power off icon
-                  onPressed: () {
-                    // Add your logout functionality here
-                  },
+                  onPressed: _showLogoutConfirmationDialog,
                 ),
               ],
             ),

@@ -9,6 +9,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  bool _isPasswordVisible = false;
 
   void _login() {
     if (_formKey.currentState!.validate()) {
@@ -64,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           // Email field
                           TextFormField(
                             controller: _emailController,
-                            decoration: InputDecoration(labelText: 'Email'),
+                            decoration: InputDecoration(labelText: 'Email',prefixIcon: Icon(Icons.email),),
                             keyboardType: TextInputType.emailAddress,
                             validator: (value) {
                               if (value == null || value.isEmpty) {
@@ -77,8 +78,23 @@ class _LoginScreenState extends State<LoginScreen> {
                           // Password field
                           TextFormField(
                             controller: _passwordController,
-                            decoration: InputDecoration(labelText: 'Password'),
-                            obscureText: true,
+                            decoration: InputDecoration(
+                              labelText: 'Password',
+                              prefixIcon: Icon(Icons.lock), // Password icon
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _isPasswordVisible
+                                      ? Icons.visibility
+                                      : Icons.visibility_off,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _isPasswordVisible = !_isPasswordVisible;
+                                  });
+                                },
+                              ),
+                            ),
+                            obscureText: !_isPasswordVisible,
                             validator: (value) {
                               if (value == null || value.isEmpty) {
                                 return 'Please enter your password';
