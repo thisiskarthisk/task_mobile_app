@@ -33,9 +33,7 @@ dependencies:
   sqflite: ^2.2.7
   path: ^1.8.3
   table_calendar: ^3.0.6
-
-
-
+  intl: ^0.18.1 # Add this line for the intl package
 
 
 

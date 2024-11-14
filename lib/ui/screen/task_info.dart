@@ -1,3 +1,217 @@
+// import 'package:flutter/material.dart';
+// import 'package:flutter_tms/ui/screen/auth/login.dart';
+// import 'package:flutter_tms/ui/screen/cases.dart';
+// import 'package:flutter_tms/ui/screen/dashboard.dart';
+// import 'package:flutter_tms/ui/screen/favorites.dart';
+// import 'package:flutter_tms/ui/screen/notifications.dart';
+//
+// class TaskInfoScreen extends StatefulWidget {
+//   @override
+//   _TaskInfoScreenState createState() => _TaskInfoScreenState();
+// }
+//
+// class _TaskInfoScreenState extends State<TaskInfoScreen> with SingleTickerProviderStateMixin {
+//   TabController? _tabController;
+//   final List<String> _titles = ["Cases", "Favorites", "Dashboard", "Notifications"];
+//
+//   @override
+//   void initState() {
+//     super.initState();
+//     _tabController = TabController(length: _titles.length, vsync: this);
+//     _tabController!.addListener(() {
+//       setState(() {}); // Update the title when the tab changes
+//     });
+//   }
+//
+//   @override
+//   void dispose() {
+//     _tabController?.dispose();
+//     super.dispose();
+//   }
+//
+//   void _showLogoutConfirmationDialog() {
+//     showDialog(
+//       context: context,
+//       builder: (BuildContext context) {
+//         return AlertDialog(
+//           title: Text("Confirm Logout"),
+//           content: Text("Are you sure you want to log out?"),
+//           actions: [
+//             TextButton(
+//               child: Text("No"),
+//               onPressed: () => Navigator.of(context).pop(),
+//             ),
+//             TextButton(
+//               child: Text("Yes"),
+//               onPressed: () {
+//                 Navigator.of(context).pop();
+//                 Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+//               },
+//             ),
+//           ],
+//         );
+//       },
+//     );
+//   }
+//
+//   void _showFilterDialog() {
+//     showDialog(
+//       context: context,
+//       builder: (BuildContext context) {
+//         return AlertDialog(
+//           title: Text("Confirm Logout"),
+//           content: Text("Are you sure you want to log out?"),
+//           actions: [
+//             TextButton(
+//               child: Text("No"),
+//               onPressed: () => Navigator.of(context).pop(),
+//             ),
+//             TextButton(
+//               child: Text("Yes"),
+//               onPressed: () {
+//                 Navigator.of(context).pop();
+//                 Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+//               },
+//             ),
+//           ],
+//         );
+//       },
+//     );
+//   }
+//
+//
+//   @override
+//   Widget build(BuildContext context) {
+//     return DefaultTabController(
+//       length: _titles.length,
+//       child: Scaffold(
+//         appBar: AppBar(
+//           centerTitle: true,
+//           backgroundColor: Colors.blue,
+//           title: Text(
+//             _titles[_tabController!.index],
+//             style: TextStyle(color: Colors.white),
+//           ),
+//           elevation: 6.0, // Shadow effect
+//           actions: _tabController!.index == 0
+//               ? [
+//             IconButton(
+//               color: Colors.white,
+//               icon: Icon(Icons.notifications),
+//               onPressed: () {
+//                 // Add notification functionality here
+//               },
+//             ),
+//             IconButton(
+//               color: Colors.white,
+//               icon: Icon(Icons.filter_list),
+//               onPressed: _showFilterDialog,
+//             ),
+//           ]
+//               : null, //
+//         ),
+//         // ),
+//         drawer: Drawer(
+//           child: Container(
+//             color: Colors.white,
+//             child: ListView(
+//               padding: EdgeInsets.zero,
+//               children: <Widget>[
+//                 DrawerHeader(
+//                   child: Text(
+//                     'Projlujo',
+//                     style: TextStyle(color: Colors.white, fontSize: 24),
+//                   ),
+//                   decoration: BoxDecoration(color: Colors.blue),
+//                 ),
+//                 ListTile(
+//                   leading: Icon(Icons.list, color: _tabController!.index == 0 ? Colors.blue : Colors.black),
+//                   title: Text('Cases', style: TextStyle(color: _tabController!.index == 0 ? Colors.blue : Colors.black)),
+//                   onTap: () {
+//                     Navigator.pop(context);
+//                     _tabController!.animateTo(0);
+//                   },
+//                 ),
+//                 ListTile(
+//                   leading: Icon(Icons.star, color: _tabController!.index == 1 ? Colors.blue : Colors.black),
+//                   title: Text('Favorites', style: TextStyle(color: _tabController!.index == 1 ? Colors.blue : Colors.black)),
+//                   onTap: () {
+//                     Navigator.pop(context);
+//                     _tabController!.animateTo(1);
+//                   },
+//                 ),
+//                 ListTile(
+//                   leading: Icon(Icons.person),
+//                   title: Text('Profile'),
+//                   onTap: () {
+//                     Navigator.pop(context);
+//                     // TODO: Navigate to Profile screen
+//                   },
+//                 ),
+//                 ListTile(
+//                   leading: Icon(Icons.settings),
+//                   title: Text('Settings'),
+//                   onTap: () {
+//                     Navigator.pop(context);
+//                     // TODO: Navigate to Settings screen
+//                   },
+//                 ),
+//                 ListTile(
+//                   leading: Icon(Icons.logout),
+//                   title: Text('Logout'),
+//                   onTap: () {
+//                     Navigator.pop(context);
+//                     _showLogoutConfirmationDialog();
+//                   },
+//                 ),
+//               ],
+//             ),
+//           ),
+//         ),
+//         body: TabBarView(
+//           controller: _tabController,
+//           children: [
+//             CasesScreen(),
+//             FavoritesScreen(),
+//             DashboardScreen(),
+//             NotificationsScreen(),
+//           ],
+//         ),
+//         bottomNavigationBar: Container(
+//           color: Colors.blue,
+//           child: TabBar(
+//             controller: _tabController,
+//             labelColor: Colors.white,
+//             unselectedLabelColor: Colors.white60,
+//             indicatorColor: Colors.white,
+//             indicator: UnderlineTabIndicator(
+//               borderSide: BorderSide(width: 4.0, color: Colors.white),
+//               insets: EdgeInsets.symmetric(horizontal: 50.0),
+//             ),
+//             tabs: [
+//               Tab(icon: Icon(Icons.list,size: 30,)),
+//               Tab(icon: Icon(Icons.star,size: 30,)),
+//               Tab(icon: Icon(Icons.calendar_today,size: 30,)),
+//               Tab(icon: Icon(Icons.notifications,size: 30,)),
+//             ],
+//           ),
+//         ),
+//         floatingActionButton: FloatingActionButton(
+//           onPressed: () {
+//             Navigator.pushReplacementNamed(context, '/home');
+//           },
+//           backgroundColor: Colors.blue,
+//           elevation: 6,
+//           child: Icon(Icons.home, color: Colors.white, size: 30),
+//         ),
+//         floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+//       ),
+//     );
+//   }
+// }
+//
+
+
 import 'package:flutter/material.dart';
 import 'package:flutter_tms/ui/screen/auth/login.dart';
 import 'package:flutter_tms/ui/screen/cases.dart';
@@ -10,76 +224,43 @@ class TaskInfoScreen extends StatefulWidget {
   _TaskInfoScreenState createState() => _TaskInfoScreenState();
 }
 
+class _TaskInfoScreenState extends State<TaskInfoScreen> with SingleTickerProviderStateMixin {
+  TabController? _tabController;
+  final List<String> _titles = ["Cases", "Favorites", "Dashboard", "Notifications"];
 
-class _TaskInfoScreenState extends State<TaskInfoScreen> {
-  int _selectedIndex = 0;
-
-  // DateTime? _startDate;
-  // DateTime? _endDate;
-  final TextEditingController _startDateController = TextEditingController();
-  final TextEditingController _endDateController = TextEditingController();
-
-  // Method to show date picker and update the corresponding controller
-  Future<void> _selectDate(BuildContext context, TextEditingController controller) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2101),
-    );
-    if (picked != null) {
-      setState(() {
-        controller.text = "${picked.toLocal()}".split(' ')[0]; // Format the date as 'YYYY-MM-DD'
-      });
-    }
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: _titles.length, vsync: this);
+    _tabController!.addListener(() {
+      setState(() {}); // Update the title when the tab changes
+    });
   }
 
-  void _showFilterDialog() {
+  @override
+  void dispose() {
+    _tabController?.dispose();
+    super.dispose();
+  }
+
+  void _showLogoutConfirmationDialog() {
     showDialog(
       context: context,
-      barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: Text("Filter by Date"),
-          content: StatefulBuilder(
-            builder: (BuildContext context, StateSetter setDialogState) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: _startDateController,
-                    readOnly: true,
-                    decoration: InputDecoration(
-                      hintText: "Select Start Date",
-                    ),
-                    onTap: () => _selectDate(context, _startDateController),
-                  ),
-                  SizedBox(height: 10),
-                  TextField(
-                    controller: _endDateController,
-                    readOnly: true,
-                    decoration: InputDecoration(
-                      hintText: "Select End Date",
-                    ),
-                    onTap: () => _selectDate(context, _endDateController),
-                  ),
-                ],
-              );
-            },
-          ),
+          title: Text("Confirm Logout"),
+          content: Text("Are you sure you want to log out?"),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                // Use _startDateController.text and _endDateController.text for filtering
-              },
-              child: Text("Filter"),
+              child: Text("No"),
+              onPressed: () => Navigator.of(context).pop(),
             ),
             TextButton(
+              child: Text("Yes"),
               onPressed: () {
                 Navigator.of(context).pop();
+                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => LoginScreen()));
               },
-              child: Text("Close"),
             ),
           ],
         );
@@ -87,184 +268,186 @@ class _TaskInfoScreenState extends State<TaskInfoScreen> {
     );
   }
 
-
-
-  // A list of content widgets to display based on the selected index
-  final List<Widget> _contentWidgets = [
-    CasesScreen(),
-    FavoritesScreen(),
-    DashboardScreen(),
-    NotificationsScreen(),
-  ];
-
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
-
-  // Logout Confirm Modal
-  void _showLogoutConfirmationDialog(){
+  void _showFilterDialog() {
     showDialog(
-        context: context,
-        builder: (BuildContext context){
-          return AlertDialog(
-            title: Text("Confirm Logout"),
-            content: Text("Are you sure you want to log out?"),
-            actions:<Widget> [
-              TextButton(
-                child:Text("No"),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-              ),
-              TextButton(
-                child:Text("Yes"),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (context) => LoginScreen())
-                  );
-                },
-              )
-            ],
-          );
-        }
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Filter Options"),
+          content: Text("Choose your filter options here."),
+          actions: [
+            TextButton(
+              child: Text("Cancel"),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            TextButton(
+              child: Text("Apply"),
+              onPressed: () {
+                Navigator.of(context).pop();
+                // Apply filter functionality
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        centerTitle: true,
-        backgroundColor: Colors.blue,
-        title: Text(
-          _selectedIndex == 0 ? 'Cases' :
-          _selectedIndex == 1 ? 'Favorites' :
-          _selectedIndex == 2 ? 'Dashboard' : 'Notifications',
-          style: TextStyle(color: Colors.white),
-        ),
-        actions: _selectedIndex == 0
-        ? [
-          IconButton(
-            color: Colors.white,
-            icon: Icon(Icons.notifications), // Notification icon
-            onPressed: () {
-              // Add your notification functionality here
-            },
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    // Define scaling factors for responsiveness
+    final double fontSizeFactor = screenWidth * 0.05;
+    final double iconSize = screenWidth * 0.08;
+    final double paddingFactor = screenWidth * 0.04;
+
+    return DefaultTabController(
+      length: _titles.length,
+      child: Scaffold(
+        appBar: AppBar(
+          centerTitle: true,
+          backgroundColor: Colors.blue,
+          title: Text(
+            _titles[_tabController!.index],
+            style: TextStyle(color: Colors.white, fontSize: fontSizeFactor),
           ),
-          IconButton(
+          elevation: 6.0, // Shadow effect
+          actions: _tabController!.index == 0
+              ? [
+            IconButton(
+              color: Colors.white,
+              icon: Icon(Icons.notifications, size: iconSize),
+              onPressed: () {
+                // Add notification functionality here
+              },
+            ),
+            IconButton(
+              color: Colors.white,
+              icon: Icon(Icons.filter_list, size: iconSize),
+              onPressed: _showFilterDialog,
+            ),
+          ]
+              : null,
+        ),
+        drawer: Drawer(
+          child: Container(
             color: Colors.white,
-            icon: Icon(Icons.filter_list),
-            onPressed: _showFilterDialog,
-          )
-        ]
-        : null ,
-      ),
-      drawer: Drawer(
-        child: Container(
-          color: Colors.white,
-          child: ListView(
-            padding: EdgeInsets.zero,
-            children: <Widget>[
-              DrawerHeader(
-                child: Text(
-                  'Projlujo',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: <Widget>[
+                DrawerHeader(
+                  child: Text(
+                    'Projlujo',
+                    style: TextStyle(color: Colors.white, fontSize: fontSizeFactor * 1.2),
                   ),
+                  decoration: BoxDecoration(color: Colors.blue),
                 ),
-                decoration: BoxDecoration(
-                  color: Colors.blue,
+                _buildDrawerItem(
+                  context,
+                  icon: Icons.list,
+                  title: 'Cases',
+                  isSelected: _tabController!.index == 0,
+                  onTap: () => _tabController!.animateTo(0),
                 ),
-              ),
-              ListTile(
-                leading: Icon(Icons.switch_account),
-                title: Text('Switch Account'),
-                onTap: () {
-                  Navigator.pop(context);
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.list),
-                title: Text('Cases'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _onItemTapped(0); // Navigate to Cases
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.person),
-                title: Text('Profile'),
-                onTap: () {
-                  Navigator.pop(context);
-                  // TODO: Navigate to Profile screen
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.settings),
-                title: Text('Settings'),
-                onTap: () {
-                  Navigator.pop(context);
-                  // TODO: Navigate to Settings screen
-                },
-              ),
-              ListTile(
-                leading: Icon(Icons.logout),
-                title: Text('Logout'),
-                onTap: () {
-                  Navigator.pop(context);
-                  // _logout();
-                  _showLogoutConfirmationDialog();
-                },
-              ),
+                _buildDrawerItem(
+                  context,
+                  icon: Icons.star,
+                  title: 'Favorites',
+                  isSelected: _tabController!.index == 1,
+                  onTap: () => _tabController!.animateTo(1),
+                ),
+                _buildDrawerItem(
+                  context,
+                  icon: Icons.person,
+                  title: 'Profile',
+                  onTap: () {
+                    Navigator.pop(context);
+                    // Navigate to Profile screen
+                  },
+                ),
+                _buildDrawerItem(
+                  context,
+                  icon: Icons.settings,
+                  title: 'Settings',
+                  onTap: () {
+                    Navigator.pop(context);
+                    // Navigate to Settings screen
+                  },
+                ),
+                _buildDrawerItem(
+                  context,
+                  icon: Icons.logout,
+                  title: 'Logout',
+                  onTap: _showLogoutConfirmationDialog,
+                ),
+              ],
+            ),
+          ),
+        ),
+        body: TabBarView(
+          controller: _tabController,
+          children: [
+            CasesScreen(),
+            FavoritesScreen(),
+            DashboardScreen(),
+            NotificationsScreen(),
+          ],
+        ),
+        bottomNavigationBar: Container(
+          color: Colors.blue,
+          child: TabBar(
+            controller: _tabController,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white60,
+            indicatorColor: Colors.white,
+            indicator: UnderlineTabIndicator(
+              borderSide: BorderSide(width: 4.0, color: Colors.white),
+              insets: EdgeInsets.symmetric(horizontal: 50.0),
+            ),
+            tabs: [
+              Tab(icon: Icon(Icons.list, size: iconSize)),
+              Tab(icon: Icon(Icons.star, size: iconSize)),
+              Tab(icon: Icon(Icons.calendar_today, size: iconSize)),
+              Tab(icon: Icon(Icons.notifications, size: iconSize)),
             ],
           ),
         ),
-      ),
-      body: _contentWidgets[_selectedIndex], // Access the widget using []
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: Colors.blue,
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(Icons.list, color: Colors.white),
-            label: 'Cases',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.star, color: Colors.white),
-            label: 'Favorites',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_today, color: Colors.white),
-            label: 'Dashboard',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.notifications, color: Colors.white),
-            label: 'Notifications',
-          ),
-        ],
-        currentIndex: _selectedIndex,
-        selectedItemColor: Colors.white,
-        onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed,
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.pushReplacementNamed(context, '/home');
-        },
-        backgroundColor: Colors.blue,
-        elevation: 6,
-        child: Icon(
-          Icons.home,
-          color: Colors.white,
-          size: 30,
+        floatingActionButton: FloatingActionButton(
+          onPressed: () {
+            Navigator.pushReplacementNamed(context, '/home');
+          },
+          backgroundColor: Colors.blue,
+          elevation: 6,
+          child: Icon(Icons.home, color: Colors.white, size: iconSize),
         ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+    );
+  }
+
+  // Drawer item builder for consistent styling
+  Widget _buildDrawerItem(
+      BuildContext context, {
+        required IconData icon,
+        required String title,
+        required VoidCallback onTap,
+        bool isSelected = false,
+      }) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final double fontSizeFactor = screenWidth * 0.05;
+
+    return ListTile(
+      leading: Icon(icon, color: isSelected ? Colors.blue : Colors.black, size: fontSizeFactor),
+      title: Text(
+        title,
+        style: TextStyle(color: isSelected ? Colors.blue : Colors.black, fontSize: fontSizeFactor),
+      ),
+      onTap: () {
+        Navigator.pop(context);
+        onTap();
+      },
     );
   }
 }
