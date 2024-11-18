@@ -136,7 +136,7 @@ class _CasesScreenState extends State<CasesScreen> {
 
                     // Info icon to navigate to TaskDetailsScreen
                     IconButton(
-                      icon: Icon(Icons.info_outline),
+                      icon: Icon(Icons.info_rounded),
                       color: Colors.blue,
                       onPressed: () {
                         Navigator.push(

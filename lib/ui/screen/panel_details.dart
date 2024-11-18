@@ -10,7 +10,6 @@ class PanelDetailsScreen extends StatefulWidget {
   @override
   _PanelDetailsScreenState createState() => _PanelDetailsScreenState();
 }
-
 class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
   final TextEditingController _messageController = TextEditingController();
 
@@ -127,9 +126,6 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                     ],
                   ),
                 ),
-
-                SizedBox(height: screenHeight * 0.01), // Adjustable spacing
-
 
                 // Members Section (Expandable)
                 buildExpandableSection(
@@ -300,6 +296,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
           ],
         ),
         SizedBox(height: 15),
+
         Row(
           children: [
             // End Date Field

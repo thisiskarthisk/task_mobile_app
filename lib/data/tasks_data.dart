@@ -15,7 +15,7 @@ final List<Map<String, dynamic>> tasks = [
     'name': 'Rotry and Diverty Valve',
     'jobType': 'Mobile App',
     'assignee': 'Murali',
-    'startDate': '2024-11-02',
+    'startDate': '2024-11-01',
     'endDate': '2024-11-11',
     'startTime': '10:00',
     'endTime': '18:00',

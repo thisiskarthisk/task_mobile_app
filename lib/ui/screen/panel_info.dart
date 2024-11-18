@@ -213,10 +213,10 @@ class _PanelInfoScreenState extends State<PanelInfoScreen> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.description, color: Colors.black),
+                          Icon(Icons.info_rounded, color: Colors.black),
                           SizedBox(width: screenWidth * 0.02), // Adjustable spacing
                           Text(
-                            'Description',
+                            'Name',
                             style: TextStyle(
                               fontSize: screenWidth * 0.045, // Adjust text size
                               fontWeight: FontWeight.bold,
@@ -225,14 +225,15 @@ class _PanelInfoScreenState extends State<PanelInfoScreen> {
                           ),
                         ],
                       ),
-                      SizedBox(height: screenHeight * 0.02), // Adjustable spacing
-                      Text(
-                        task['description'] ?? 'No description available.',
-                        style: TextStyle(
-                          fontSize: fontSizeContent, // Adjust text size
-                          color: Colors.black87,
-                        ),
-                      ),
+                      // SizedBox(height: screenHeight * 0.02), // Adjustable spacing
+
+                      // Text(
+                      //   task['description'] ?? 'No description available.',
+                      //   style: TextStyle(
+                      //     fontSize: fontSizeContent, // Adjust text size
+                      //     color: Colors.black87,
+                      //   ),
+                      // ),
                     ],
                   ),
                 ),
