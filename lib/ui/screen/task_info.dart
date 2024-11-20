@@ -209,7 +209,8 @@
 //     );
 //   }
 // }
-//
+
+
 
 
 import 'package:flutter/material.dart';
@@ -217,6 +218,7 @@ import 'package:flutter_tms/ui/screen/auth/login.dart';
 import 'package:flutter_tms/ui/screen/cases.dart';
 import 'package:flutter_tms/ui/screen/dashboard.dart';
 import 'package:flutter_tms/ui/screen/favorites.dart';
+import 'package:flutter_tms/ui/screen/home.dart';
 import 'package:flutter_tms/ui/screen/notifications.dart';
 
 class TaskInfoScreen extends StatefulWidget {
@@ -301,7 +303,6 @@ class _TaskInfoScreenState extends State<TaskInfoScreen> with SingleTickerProvid
     // Define scaling factors for responsiveness
     final double fontSizeFactor = screenWidth * 0.05;
     final double iconSize = screenWidth * 0.08;
-    final double paddingFactor = screenWidth * 0.04;
 
     return DefaultTabController(
       length: _titles.length,
@@ -415,8 +416,16 @@ class _TaskInfoScreenState extends State<TaskInfoScreen> with SingleTickerProvid
           ),
         ),
         floatingActionButton: FloatingActionButton(
+          // onPressed: () {
+          //   Navigator.pushReplacementNamed(context, '/home');
+          // },
           onPressed: () {
-            Navigator.pushReplacementNamed(context, '/home');
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => HomeScreen(userName: 'karthick', userEmail: 'kartgi@gmail.com'),
+              ),
+            );
           },
           backgroundColor: Colors.blue,
           elevation: 6,

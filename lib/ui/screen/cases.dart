@@ -27,6 +27,7 @@ class _CasesScreenState extends State<CasesScreen> {
     double screenWidth = MediaQuery.of(context).size.width;  // Get screen width
     double screenHeight = MediaQuery.of(context).size.height; // Get screen height
     double padding = screenWidth * 0.05; // Dynamic padding based on screen size
+    final double iconSize = screenWidth * 0.08;
 
     return Scaffold(
       backgroundColor: Colors.blue,
@@ -136,7 +137,7 @@ class _CasesScreenState extends State<CasesScreen> {
 
                     // Info icon to navigate to TaskDetailsScreen
                     IconButton(
-                      icon: Icon(Icons.info_rounded),
+                      icon: Icon(Icons.info_rounded,size: iconSize,),
                       color: Colors.blue,
                       onPressed: () {
                         Navigator.push(

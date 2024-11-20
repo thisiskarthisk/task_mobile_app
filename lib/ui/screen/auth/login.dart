@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_tms/ui/screen/home.dart';
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -105,7 +106,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           SizedBox(height: 32.0),
                           // Login button
                           ElevatedButton(
-                            onPressed: _login,
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => HomeScreen(userName: 'karthick', userEmail: 'kartgi@gmail.com'),
+                                ),
+                              );
+                            },
                             child: Text('Login'),
                           ),
                         ],
