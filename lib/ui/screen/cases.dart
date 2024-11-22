@@ -2,10 +2,12 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_tms/ui/screen/task_details.dart';
+import 'package:flutter_tms/ui/screen/panel.dart';
+import 'package:flutter_tms/ui/screen/case_details.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import './common/commonService.dart';
 import 'package:flutter_tms/api/authService.dart';
+import 'package:flutter_tms/data/jobs_data.dart';
 
 class CasesScreen extends StatefulWidget {
   @override
@@ -13,7 +15,8 @@ class CasesScreen extends StatefulWidget {
 }
 
 class _CasesScreenState extends State<CasesScreen> {
-  List<Map<String, dynamic>> userCompanyCases = [];
+
+    List<Map<String, dynamic>> userCompanyCases = [];
   List<Map<String, dynamic>> caseTypes = [];
   bool isLoading = true;
   bool starred = false;
@@ -138,22 +141,71 @@ class _CasesScreenState extends State<CasesScreen> {
     return userCompanyCases.where((task) => task['isFavorite'] == true).toList();
   }
 
+  // Dummy list of tasks
+  // final List<Map<String, dynamic>> tasks = [
+  //   {
+  //     'name': 'Flutter Mobile App',
+  //     'jobType':'Web App',
+  //     'assignee': 'karthi Sk',
+  //     'startDate': '2024-11-01',
+  //     'endDate': '2024-11-10',
+  //     'details': 'Detailed description of Task 1',
+  //     'isFavorite': false,
+  //     'progress': 0.4, // Sample progress value (40%)
+  //   },
+  //   {
+  //     'name': 'Rotry and Diverty Valve',
+  //     'jobType':'Mobile App',
+  //     'assignee': 'Murali',
+  //     'startDate': '2024-11-02',
+  //     'endDate': '2024-11-11',
+  //     'details': 'Detailed description of Task 2',
+  //     'isFavorite': false,
+  //     'progress': 0.7, // Sample progress value (70%)
+  //   },
+  //   {
+  //     'name': 'Whatsapp Message Send Meta',
+  //     'jobType':'Mac App',
+  //     'assignee': 'Ajay',
+  //     'startDate': '2024-11-03',
+  //     'endDate': '2024-11-12',
+  //     'details': 'Detailed description of Task 3',
+  //     'isFavorite': false,
+  //     'progress': 0.9, // Sample progress value (90%)
+  //   },
+  // ];
+
+  // Toggle favorite status
   void toggleFavorite(int index) {
     setState(() {
+      // tasks[index]['isFavorite'] = !tasks[index]['isFavorite'];
       userCompanyCases[index]['starred'] =
       !(userCompanyCases[index]['starred']);
     });
   }
 
+  // Get the favorite tasks
+  List<Map<String, dynamic>> get favoriteTasks {
+    return tasks.where((task) => task['isFavorite'] == true).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
+    double screenWidth = MediaQuery.of(context).size.width;  // Get screen width
+    double screenHeight = MediaQuery.of(context).size.height; // Get screen height
+    double padding = screenWidth * 0.05; // Dynamic padding based on screen size
+    final double iconSize = screenWidth * 0.08;
+
     return Scaffold(
-      body: isLoading
+      backgroundColor: Colors.blue,
+      body: tasks.isEmpty
+            isLoading
           ? Center(child: CircularProgressIndicator())
           : userCompanyCases.isEmpty
           ? Center(child: Text('No cases available.'))
+          // ? bodyWidget() // Show loading widget if tasks are empty
           : ListView.builder(
-        padding: EdgeInsets.all(16.0),
+        padding: EdgeInsets.all(padding),
         itemCount: userCompanyCases.length,
         itemBuilder: (context, index) {
           final task = userCompanyCases[index];
@@ -162,16 +214,15 @@ class _CasesScreenState extends State<CasesScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) =>
-                      TaskDetailsScreen(task: task),
+                  builder: (context) => PanelScreen(task: task),
                 ),
               );
             },
             child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 10),
+              margin: const EdgeInsets.symmetric(vertical: screenHeight * 0.01), // Vertical margin based on screen height
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(2),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.grey.withOpacity(0.2),
@@ -181,7 +232,7 @@ class _CasesScreenState extends State<CasesScreen> {
                 ],
               ),
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: EdgeInsets.all(screenWidth * 0.04), // Dynamic padding
                 child: Row(
                   children: [
                     IconButton(
@@ -193,72 +244,78 @@ class _CasesScreenState extends State<CasesScreen> {
                       ),
                       onPressed: () => toggleFavorite(index),
                     ),
-                    const SizedBox(width: 1),
-                    const SizedBox(
-                      height: 30,
+
+                    SizedBox(width: screenWidth * 0.02), // Gap between icon and task info
+
+                    Container(
+                      height: screenHeight * 0.03, // Dynamic divider height
                       child: VerticalDivider(
                         thickness: 1,
                         width: 5,
                         color: Colors.grey,
                       ),
                     ),
-                    const SizedBox(width: 10),
+
+                    SizedBox(width: screenWidth * 0.04),
+
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             task['name'] ?? 'Task Name',
-                            style: const TextStyle(
-                              fontSize: 13,
+                            style: TextStyle(
+                              fontSize: screenWidth < 600 ? 14 : 16, // Adjust font size based on screen size
                               color: Colors.blue,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          const SizedBox(height: 5),
+                          SizedBox(height: screenHeight * 0.01),
+
+                          // Progress Bar
                           Row(
                             children: [
                               Container(
                                 height: 10,
-                                width: 80,
+                                width: screenWidth * 0.25, // Dynamic width based on screen width
                                 decoration: BoxDecoration(
-                                  borderRadius:
-                                  BorderRadius.circular(4),
-                                  color: Colors.blue[600],
+                                  borderRadius: BorderRadius.circular(4),
+                                  color: Colors.blue[600], // Background of the progress bar
                                 ),
                                 child: FractionallySizedBox(
                                   alignment: Alignment.centerLeft,
                                   widthFactor: task['progress'] ?? 0.0,
                                   child: Container(
                                     decoration: BoxDecoration(
-                                      borderRadius:
-                                      BorderRadius.circular(4),
-                                      color: Colors.green,
+                                      borderRadius: BorderRadius.circular(4),
+                                      color: Colors.green, // Blue color for progress
                                     ),
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 5),
+                              SizedBox(width: screenWidth * 0.02),
                               Text(
                                 task['case_type'] ?? 'Job Type',
                                 style: const TextStyle(
                                   color: Colors.blue,
-                                  fontSize: 13,
+                                  fontSize: screenWidth < 600 ? 12 : 14, // Adjust font size based on screen size
                                 ),
+                              ),
                               ),
                             ],
                           ),
                         ],
                       ),
                     ),
+                    // Info icon to navigate to TaskDetailsScreen
                     IconButton(
-                      icon: const Icon(Icons.info_outline),
+                      icon: Icon(Icons.info_rounded,size: iconSize,),
+                      color: Colors.blue,
                       onPressed: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) =>
-                                TaskDetailsScreen(task: task),
+                            builder: (context) => CaseDetailsScreen(task: job),
                           ),
                         );
                       },
@@ -280,3 +337,6 @@ class _CasesScreenState extends State<CasesScreen> {
     );
   }
 }
+
+
+

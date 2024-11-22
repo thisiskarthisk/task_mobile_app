@@ -108,6 +108,14 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Get screen width and height using MediaQuery
+    double screenWidth = MediaQuery.of(context).size.width;
+    double screenHeight = MediaQuery.of(context).size.height;
+
+    // Define some dynamic values based on screen size
+    double padding = screenWidth * 0.05; // 5% padding
+    double fontSize = screenWidth < 600 ? 18 : 24; // Smaller font size on smaller screens
+
     final favoriteCases = userCompanyCases.where((task) => task['starred'] == 1).toList();     // Filter the cases where starred == 1 (true favorite cases)
 
     return Scaffold(
