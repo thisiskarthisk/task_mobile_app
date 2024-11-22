@@ -1,5 +1,11 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_tms/ui/screen/task_details.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import './common/commonService.dart';
+import 'package:flutter_tms/api/authService.dart';
 
 class CasesScreen extends StatefulWidget {
   @override
@@ -7,74 +13,162 @@ class CasesScreen extends StatefulWidget {
 }
 
 class _CasesScreenState extends State<CasesScreen> {
-  // Dummy list of tasks
-  final List<Map<String, dynamic>> tasks = [
-    {
-      'name': 'Flutter Mobile App',
-      'jobType':'Web App',
-      'assignee': 'karthi Sk',
-      'startDate': '2024-11-01',
-      'endDate': '2024-11-10',
-      'details': 'Detailed description of Task 1',
-      'isFavorite': false,
-      'progress': 0.4, // Sample progress value (40%)
-    },
-    {
-      'name': 'Rotry and Diverty Valve',
-      'jobType':'Mobile App',
-      'assignee': 'Murali',
-      'startDate': '2024-11-02',
-      'endDate': '2024-11-11',
-      'details': 'Detailed description of Task 2',
-      'isFavorite': false,
-      'progress': 0.7, // Sample progress value (70%)
-    },
-    {
-      'name': 'Whatsapp Message Send Meta',
-      'jobType':'Mac App',
-      'assignee': 'Ajay',
-      'startDate': '2024-11-03',
-      'endDate': '2024-11-12',
-      'details': 'Detailed description of Task 3',
-      'isFavorite': false,
-      'progress': 0.9, // Sample progress value (90%)
-    },
-  ];
+  List<Map<String, dynamic>> userCompanyCases = [];
+  List<Map<String, dynamic>> caseTypes = [];
+  bool isLoading = true;
+  bool starred = false;
+  String? _taskAccessToken;
+  int? _selectedCompanyId;
 
-  // Toggle favorite status
-  void toggleFavorite(int index) {
+  final AuthService _authService = AuthService();
+  final commonService _service = commonService();
+
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    await _loadSelectedCompanyIdFromPrefs();
+    await _getInstance();
+  }
+
+  Future<void> _getInstance() async {
+    final instances = await _service.getSavedInstances(); // This method retrieves all instances.
+    for (var instance in instances) {
+      final domainUrl = instance['domain_url'];
+      if (domainUrl != null) {
+        _fetchCaseTypes(domainUrl);
+      }
+    }
+  }
+
+  Future<void> _loadSelectedCompanyIdFromPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final selectedCompanyId = prefs.getInt('selected_company_id');
     setState(() {
-      tasks[index]['isFavorite'] = !tasks[index]['isFavorite'];
+      _selectedCompanyId = selectedCompanyId;
     });
   }
 
-  // Get the favorite tasks
-  List<Map<String, dynamic>> get favoriteTasks {
-    return tasks.where((task) => task['isFavorite'] == true).toList();
+  // Method to fetch case types from API using the domain URL
+  Future<void> _fetchCaseTypes(String domainUrl) async {
+    final taskAccessToken = await _authService.getIdt();
+    setState(() {
+      _taskAccessToken = taskAccessToken;
+    });
+    try {
+      final String url = '$domainUrl/api/v1/user/company/casetypes?companyId=$_selectedCompanyId';
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Authorization': 'Bearer $_taskAccessToken',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      );
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        final dynamic caseTypesData = responseData['data']['caseTypes'];
+        await _getUserCompanyCases(domainUrl);
+        // Assuming the response data has a "data" key containing the list of case types
+        setState(() {
+          caseTypes = List<Map<String, dynamic>>.from(caseTypesData);
+          isLoading = false; // Set loading state to false after fetching data
+        });
+      } else {
+        setState(() {
+          isLoading = false;
+        });
+        throw Exception('Failed to load case types');
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+      });
+      print('Error fetching case types: $e');
+    }
+  }
+
+  Future<void> _getUserCompanyCases(String domainUrl, {String caseType = "", bool starred = false}) async { // Method to fetch cases based on selected case types and other filters
+    setState(() {
+      isLoading = true; // Start loading state
+    });
+    try {
+      String params = ""; // Build query parameters dynamically
+      if ( caseType.isNotEmpty ) {
+        params += "&caseType=$caseType";
+      }
+      if (starred) {
+        params += "&starred=1";
+      }
+      final String url = '$domainUrl/api/v1/user/company/cases?companyId=$_selectedCompanyId$params';
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Authorization': 'Bearer $_taskAccessToken',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      );
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        final dynamic casesData = responseData['data']['cases'];
+        setState(() {
+          userCompanyCases = List<Map<String, dynamic>>.from(casesData);
+          isLoading = false; // Stop loading after fetching cases
+        });
+      } else {
+        setState(() {
+          isLoading = false;
+        });
+        throw Exception('Failed to load user company cases');
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+      });
+      userCompanyCases = [];
+      print('Error fetching user company cases: $e');
+    }
+  }
+
+  List<Map<String, dynamic>> get favoriteCases {
+    return userCompanyCases.where((task) => task['isFavorite'] == true).toList();
+  }
+
+  void toggleFavorite(int index) {
+    setState(() {
+      userCompanyCases[index]['starred'] =
+      !(userCompanyCases[index]['starred']);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: tasks.isEmpty
-          ? bodyWidget() // Show loading widget if tasks are empty
+      body: isLoading
+          ? Center(child: CircularProgressIndicator())
+          : userCompanyCases.isEmpty
+          ? Center(child: Text('No cases available.'))
           : ListView.builder(
         padding: EdgeInsets.all(16.0),
-        itemCount: tasks.length,
+        itemCount: userCompanyCases.length,
         itemBuilder: (context, index) {
-          final task = tasks[index];
+          final task = userCompanyCases[index];
           return GestureDetector(
             onTap: () {
-              // Navigate to TaskDetailsScreen when full box is clicked
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => TaskDetailsScreen(task: task),
+                  builder: (context) =>
+                      TaskDetailsScreen(task: task),
                 ),
               );
             },
             child: Container(
-              margin: EdgeInsets.symmetric(vertical: 10),
+              margin: const EdgeInsets.symmetric(vertical: 10),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
@@ -90,85 +184,75 @@ class _CasesScreenState extends State<CasesScreen> {
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
                   children: [
-                    // Star icon to mark/unmark as favorite
                     IconButton(
                       icon: Icon(
                         Icons.star,
-                        color: task['isFavorite']
+                        color: task['starred'] == 1
                             ? Colors.amber
                             : Colors.grey,
                       ),
                       onPressed: () => toggleFavorite(index),
                     ),
-
-                    SizedBox(width: 1), // Gap between icon and task info
-
-                    Container(
-                      height: 30, // Ensure a height for the divider
+                    const SizedBox(width: 1),
+                    const SizedBox(
+                      height: 30,
                       child: VerticalDivider(
                         thickness: 1,
                         width: 5,
                         color: Colors.grey,
                       ),
                     ),
-
-                    SizedBox(width: 10),
-
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             task['name'] ?? 'Task Name',
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 13,
-                              color:
-                              Colors.blue, // Blue color for progress
+                              color: Colors.blue,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          SizedBox(height: 5),
-                          // Progress Bar
+                          const SizedBox(height: 5),
                           Row(
                             children: [
                               Container(
                                 height: 10,
                                 width: 80,
-                                // width: double.infinity,
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(4),
-                                  color: Colors.blue[
-                                  600], // Background of the progress bar
+                                  borderRadius:
+                                  BorderRadius.circular(4),
+                                  color: Colors.blue[600],
                                 ),
                                 child: FractionallySizedBox(
                                   alignment: Alignment.centerLeft,
-                                  widthFactor: task['progress'] ??
-                                      0.0, // Progress in percentage (0-1)
+                                  widthFactor: task['progress'] ?? 0.0,
                                   child: Container(
                                     decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(4),
-                                      color: Colors
-                                          .green, // Blue color for progress
+                                      borderRadius:
+                                      BorderRadius.circular(4),
+                                      color: Colors.green,
                                     ),
                                   ),
                                 ),
                               ),
-                              SizedBox(width: 5,),
+                              const SizedBox(width: 5),
                               Text(
-                                task['jobType'] ?? 'job Type',
-                                style: TextStyle(
+                                task['case_type'] ?? 'Job Type',
+                                style: const TextStyle(
                                   color: Colors.blue,
                                   fontSize: 13,
                                 ),
-                              )
+                              ),
                             ],
-                          )
+                          ),
                         ],
                       ),
                     ),
-                    // Info icon to navigate to TaskDetailsScreen
                     IconButton(
-                      icon: Icon(Icons.info_outline),
+                      icon: const Icon(Icons.info_outline),
                       onPressed: () {
                         Navigator.push(
                           context,
@@ -190,7 +274,6 @@ class _CasesScreenState extends State<CasesScreen> {
   }
 
   // Widget for loading screen
-
   Widget bodyWidget() {
     return Center(
       child: CircularProgressIndicator(),

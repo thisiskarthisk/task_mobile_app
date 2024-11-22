@@ -3,19 +3,19 @@ import 'package:flutter_tms/ui/screen/auth/login.dart';
 import 'package:flutter_tms/ui/screen/cases.dart';
 import 'package:flutter_tms/ui/screen/dashboard.dart';
 import 'package:flutter_tms/ui/screen/favorites.dart';
+import 'package:flutter_tms/ui/screen/home.dart';
 import 'package:flutter_tms/ui/screen/notifications.dart';
+import 'package:flutter_tms/api/authService.dart';
 
 class TaskInfoScreen extends StatefulWidget {
   @override
   _TaskInfoScreenState createState() => _TaskInfoScreenState();
 }
 
-
 class _TaskInfoScreenState extends State<TaskInfoScreen> {
   int _selectedIndex = 0;
 
-  // DateTime? _startDate;
-  // DateTime? _endDate;
+  final AuthService authService = AuthService();
   final TextEditingController _startDateController = TextEditingController();
   final TextEditingController _endDateController = TextEditingController();
 
@@ -49,16 +49,16 @@ class _TaskInfoScreenState extends State<TaskInfoScreen> {
                   TextField(
                     controller: _startDateController,
                     readOnly: true,
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       hintText: "Select Start Date",
                     ),
                     onTap: () => _selectDate(context, _startDateController),
                   ),
-                  SizedBox(height: 10),
+                  const SizedBox(height: 10),
                   TextField(
                     controller: _endDateController,
                     readOnly: true,
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       hintText: "Select End Date",
                     ),
                     onTap: () => _selectDate(context, _endDateController),
@@ -73,21 +73,19 @@ class _TaskInfoScreenState extends State<TaskInfoScreen> {
                 Navigator.of(context).pop();
                 // Use _startDateController.text and _endDateController.text for filtering
               },
-              child: Text("Filter"),
+              child: const Text("Filter"),
             ),
             TextButton(
               onPressed: () {
                 Navigator.of(context).pop();
               },
-              child: Text("Close"),
+              child: const Text("Close"),
             ),
           ],
         );
       },
     );
   }
-
-
 
   // A list of content widgets to display based on the selected index
   final List<Widget> _contentWidgets = [
@@ -109,17 +107,17 @@ class _TaskInfoScreenState extends State<TaskInfoScreen> {
         context: context,
         builder: (BuildContext context){
           return AlertDialog(
-            title: Text("Confirm Logout"),
-            content: Text("Are you sure you want to log out?"),
+            title: const Text("Confirm Logout"),
+            content: const Text("Are you sure you want to log out?"),
             actions:<Widget> [
               TextButton(
-                child:Text("No"),
+                child:const Text("No"),
                 onPressed: () {
                   Navigator.of(context).pop();
                 },
               ),
               TextButton(
-                child:Text("Yes"),
+                child: const Text("Yes"),
                 onPressed: () {
                   Navigator.of(context).pop();
                   Navigator.pushReplacement(
@@ -145,20 +143,20 @@ class _TaskInfoScreenState extends State<TaskInfoScreen> {
           _selectedIndex == 0 ? 'Cases' :
           _selectedIndex == 1 ? 'Favorites' :
           _selectedIndex == 2 ? 'Dashboard' : 'Notifications',
-          style: TextStyle(color: Colors.white),
+          style: const TextStyle(color: Colors.white),
         ),
         actions: _selectedIndex == 0
         ? [
           IconButton(
             color: Colors.white,
-            icon: Icon(Icons.notifications), // Notification icon
+            icon: const Icon(Icons.notifications), // Notification icon
             onPressed: () {
               // Add your notification functionality here
             },
           ),
           IconButton(
             color: Colors.white,
-            icon: Icon(Icons.filter_list),
+            icon: const Icon(Icons.filter_list),
             onPressed: _showFilterDialog,
           )
         ]
@@ -170,7 +168,10 @@ class _TaskInfoScreenState extends State<TaskInfoScreen> {
           child: ListView(
             padding: EdgeInsets.zero,
             children: <Widget>[
-              DrawerHeader(
+              const DrawerHeader(
+                decoration: const BoxDecoration(
+                  color: Colors.blue,
+                ),
                 child: Text(
                   'Projlujo',
                   style: TextStyle(
@@ -178,13 +179,10 @@ class _TaskInfoScreenState extends State<TaskInfoScreen> {
                     fontSize: 24,
                   ),
                 ),
-                decoration: BoxDecoration(
-                  color: Colors.blue,
-                ),
               ),
               ListTile(
-                leading: Icon(Icons.switch_account),
-                title: Text('Switch Account'),
+                leading: const Icon(Icons.switch_account),
+                title: const Text('Switch Account'),
                 onTap: () {
                   Navigator.pop(context);
                 },
@@ -218,7 +216,6 @@ class _TaskInfoScreenState extends State<TaskInfoScreen> {
                 title: Text('Logout'),
                 onTap: () {
                   Navigator.pop(context);
-                  // _logout();
                   _showLogoutConfirmationDialog();
                 },
               ),
@@ -253,12 +250,26 @@ class _TaskInfoScreenState extends State<TaskInfoScreen> {
         type: BottomNavigationBarType.fixed,
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.pushReplacementNamed(context, '/home');
+        onPressed: () async {
+          Map<String, String?> userData = await authService.getUserData();
+          if (userData['userName'] != null && userData['userEmail'] != null) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => HomeScreen(userName: userData['userName']!, userEmail: userData['userEmail']!),
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar( // Handle missing data explicitly
+              const SnackBar(
+                content: Text('Error: Missing user information.'),
+              ),
+            );
+          }
         },
         backgroundColor: Colors.blue,
         elevation: 6,
-        child: Icon(
+        child: const Icon(
           Icons.home,
           color: Colors.white,
           size: 30,

@@ -33,8 +33,10 @@ dependencies:
   sqflite: ^2.2.7
   path: ^1.8.3
   table_calendar: ^3.0.6
-
-
+  http: ^1.2.2
+  shared_preferences: ^2.3.3
+  firebase_core: ^3.7.0
+  firebase_auth: ^5.3.2
 
 
 
