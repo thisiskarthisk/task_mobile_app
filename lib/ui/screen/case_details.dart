@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-class TaskDetailsScreen extends StatelessWidget {
+class CaseDetailsScreen extends StatelessWidget {
   final Map<String, dynamic> task;
 
-  const TaskDetailsScreen({Key? key, required this.task}) : super(key: key);
+  const CaseDetailsScreen({Key? key, required this.task}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +20,7 @@ class TaskDetailsScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.blue,
         title: Text(
-          "Task Details",
+          "Case Details",
           style: TextStyle(fontSize: titleFontSize),
         ),
       ),

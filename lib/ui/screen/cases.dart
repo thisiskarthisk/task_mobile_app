@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_tms/ui/screen/panel.dart';
-import 'package:flutter_tms/ui/screen/task_details.dart';
+import 'package:flutter_tms/ui/screen/case_details.dart';
 import 'package:flutter_tms/data/jobs_data.dart';
 
 class CasesScreen extends StatefulWidget {
@@ -143,7 +143,7 @@ class _CasesScreenState extends State<CasesScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => TaskDetailsScreen(task: job),
+                            builder: (context) => CaseDetailsScreen(task: job),
                           ),
                         );
                       },
