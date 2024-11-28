@@ -6,12 +6,13 @@ import 'package:flutter_tms/ui/screen/notifications.dart';
 import 'package:flutter_tms/ui/screen/task_info.dart';
 import 'ui/screen/auth/login.dart'; // Import LoginScreen
 import 'ui/screen/home.dart';  // Import HomeScreen
+import 'ui/screen/auth/splash_screen.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(Tms());
 }
 
-class MyApp extends StatelessWidget {
+class Tms extends StatelessWidget {
   get sk => null;
 
   @override
@@ -22,10 +23,29 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      initialRoute: '/login', // Set initial route
+      initialRoute: '/splash', // Set initial route
       routes: {
+        '/splash': (context) => SplashScreen(),
         '/login': (context) => LoginScreen(), // Route to LoginScreen
-        '/home': (context) => HomeScreen(userName: 'sk', userEmail: 'karthi@proflujo.com'), // Route to HomeScreen
+        '/home': (context) {
+          final args = ModalRoute.of(context)?.settings.arguments as Map<String, String?>?;
+
+            if (args != null && args['userName'] != null && args['userEmail'] != null) {
+              return HomeScreen(
+                userName: args['userName']!,
+                userEmail: args['userEmail']!,
+              );
+            } else {
+
+              WidgetsBinding.instance.addPostFrameCallback((_) { // Redirect to login if arguments are missing
+                Navigator.of(context).pushReplacementNamed('/login');
+              });
+
+              return const Scaffold(
+                body: Center(child: CircularProgressIndicator()),
+              );
+            }
+          },
         '/task_info': (context) => TaskInfoScreen(),
         '/cases': (context) => CasesScreen(),
         '/favorites': (context) => FavoritesScreen(),
