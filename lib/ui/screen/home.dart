@@ -23,38 +23,19 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   bool _isCompanyInfoVisible = false;
   bool isCompanyLoading = false;
+  bool _showCompanyDetails = false;
   String? _authToken;
   String? _appUrl;
   String? _taskAccessToken; // State to control visibility of horizontal card
 
-
   final AuthService _authService = AuthService();
   final commonService _service = commonService();
   List<Map<String, String >> instanceList = [];
+  List<Map<String, String>> appsList = [];
   Map<String, dynamic>? companyDetails;
-  late Future<List<Map<String, String>>> _cachedInstances;
 
-
-  // bool _showCompanyDetails = false;
-  // String currUserName = "Karthi Sk";
-  // String currUserEmail = "Karthisk@gmail.com";
-
-  // List of apps
-  // List<String> appsList = [
-  //   "App 1",
-  //   "App 2",
-  //   "App 3"
-  // ];  // For testing with multiple items
-
-  // Map each app to a list of companies
-  // Map<String, List<String>> companiesForApp = {
-  //   "App 1": ["Company A", "Company B", "Company C", "Company D", "Company i", "Company k",],
-  //   "App 2": ["Company E", "Company F"],
-  //   "App 3": ["Company G", "Company H", "Company I"],
-  // };
-
-  // String? _selectedApp; // Track the selected app
-  // String? _selectedCompany; // Track the selected company
+  String? _selectedApp; // Track the selected app
+  String? _selectedCompany; // Track the selected company
 
   BoxDecoration themeGradient(BuildContext context) {
     return BoxDecoration(
@@ -66,17 +47,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-
   @override
   void initState() {
     super.initState();
     _initializeData();
-    _cachedInstances = _service.getSavedInstances();
   }
 
   Future<void> _initializeData() async {
     await _loadAuthToken();
     if (_authToken != null && _authToken!.isNotEmpty) {
+      _initializeAppsList();
       fetchAllCompanies();
       await _getInstances();
     } else {
@@ -84,11 +64,17 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _initializeAppsList() async {
+    final instances = await _service.getSavedInstances();
+    setState(() {
+      appsList = instances;
+    });
+  }
+
   Future<void> _loadAuthToken() async {
     try {
       final token = await _authService.getToken();
       final taskAccessToken = await _authService.getIdt();
-
       setState(() {
         _authToken = token;
         _taskAccessToken = taskAccessToken;
@@ -109,7 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
         },
       );
 
-      print('response: ${json.decode(instance.body)}');
+      print('response: instance: ${json.decode(instance.body)}');
 
       if (instance.statusCode == 200) {
         final Map<String, dynamic> responseData = json.decode(instance.body);
@@ -187,6 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
           companyDetails = data;
         });
         await _saveCompanyDetailsToPrefs(domainUrl, data);
+
         print('Company Details: $data');
       } else {
         print('Failed to load company details. Status Code: ${response.statusCode}');
@@ -274,7 +261,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-
   @override
   Widget build(BuildContext context) {
     double screenHeight = MediaQuery.of(context).size.height;
@@ -286,6 +272,10 @@ class _HomeScreenState extends State<HomeScreen> {
     double _sliverAppBarHeight = screenHeight * 0.3;
 
     List<dynamic> companies = companyDetails?['data']['companies'] ?? [];
+
+    print('companies: $companies');
+    print('_showCompanyDetails: $_showCompanyDetails');
+    print('_selectedApp: $_selectedApp');
 
     return Scaffold(
       appBar: AppBar(
@@ -328,8 +318,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: <Widget>[
                       CircleAvatar(
                         radius: screenWidth * 0.12,
+                        backgroundColor: Colors.white,
                         child: Text(
-                          currUserName.substring(0, 1).toUpperCase(),
+                          // currUserName.substring(0, 1).toUpperCase(),
+                            '${widget.userName.substring(0, 1).toUpperCase()}',
                           style: TextStyle(
                             color: Theme.of(context).primaryColorDark,
                             fontSize: screenWidth * 0.1,
@@ -384,12 +376,14 @@ class _HomeScreenState extends State<HomeScreen> {
                           ? Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: appsList.map((appName) {
-                          bool isActiveApp = _selectedApp == appName;
+                          String host = appName['domain_url'] ?? 'Unknown Host';
+                          bool isActiveApp = _selectedApp == host;
                           return GestureDetector(
-                            onTap: () {
+                            onTap: () async {
                               setState(() {
-                                _selectedApp = appName;
+                                _selectedApp = host;
                                 _showCompanyDetails = true;
+                                _appUrl = appName['domain_url'];
                               });
                             },
                             child: Container(
@@ -402,7 +396,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               child: Center(
                                 child: Text(
-                                  appName,
+                                  Uri.parse(host).host,
                                   style: TextStyle(color: isActiveApp ? Colors.blue : Colors.white),
                                 ),
                               ),
@@ -421,13 +415,16 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         itemCount: appsList.length,
                         itemBuilder: (context, index) {
-                          String appName = appsList[index];
+                          String appName = appsList[index]['domain_url'] ?? '';
                           bool isActiveApp = _selectedApp == appName;
                           return GestureDetector(
                             onTap: () {
+                              print('Tapped on app: $appName');
+
                               setState(() {
                                 _selectedApp = appName; // Set the selected app
                                 _showCompanyDetails = true; // Show company details
+                                _appUrl = appsList[index]['domain_url'];
                               });
                             },
                             child: Container(
@@ -447,7 +444,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ],                              ),
                               child: Center(
                                 child: Text(
-                                  appName,
+                                  Uri.parse(appName).host,
                                   style: TextStyle(color: isActiveApp ? Colors.white : Colors.blue),
                                 ),
                               ),
@@ -467,14 +464,18 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: ListView.builder(
                             shrinkWrap: true,
                             physics: NeverScrollableScrollPhysics(),
-                            itemCount: companiesForApp[_selectedApp!]?.length ?? 0,
+                            itemCount: companies.length, // Use the length of the companies list
                             itemBuilder: (context, index) {
-                              String company = companiesForApp[_selectedApp!]![index];
-                              bool isActiveCompany = _selectedCompany == company;
+                              var company = companies[index]; // Get the current company data
+                              String companyName = company['name']; // Extract the company name
+                              int companyId = company['id'];
+                              List roles = company['roles'] ?? []; // Extract the roles (default to an empty list)
+                              bool isActiveCompany = _selectedCompany == companyName;
+
                               return GestureDetector(
                                 onTap: () {
                                   setState(() {
-                                    _selectedCompany = company;
+                                    _selectedCompany = companyName;
                                   });
                                 },
                                 child: Card(
@@ -486,18 +487,21 @@ class _HomeScreenState extends State<HomeScreen> {
                                       child: Icon(Icons.business, color: Colors.black),
                                     ),
                                     title: Text(
-                                      company,
-                                      style: TextStyle(color: isActiveCompany ? Colors.white : Colors.black,fontWeight: FontWeight.bold),
+                                      companyName,
+                                      style: TextStyle(color: isActiveCompany ? Colors.white : Colors.black, fontWeight: FontWeight.bold),
                                     ),
-                                    subtitle: Text("Role: User", style: TextStyle(color: isActiveCompany ? Colors.white : Colors.grey)),
+                                    subtitle: Text(
+                                      "Roles: ${roles.join(', ')}", // Display roles as a comma-separated list
+                                      style: TextStyle(color: isActiveCompany ? Colors.white : Colors.grey),
+                                    ),
                                     trailing: Icon(
                                       Icons.arrow_forward,
                                       color: isActiveCompany ? Colors.white : Colors.blue,
                                     ),
-                                    onTap: () {
-                                      // ScaffoldMessenger.of(context).showSnackBar(
-                                      //   SnackBar(content: Text('Selected: $company')),
-                                      // );
+                                    onTap: () async {
+                                      final prefs = await SharedPreferences.getInstance();
+                                      await prefs.setInt('selected_company_id', companyId);
+
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(

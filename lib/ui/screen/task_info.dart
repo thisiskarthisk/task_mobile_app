@@ -15,6 +15,7 @@ class TaskInfoScreen extends StatefulWidget {
 
 class _TaskInfoScreenState extends State<TaskInfoScreen> with SingleTickerProviderStateMixin {
   TabController? _tabController;
+  final AuthService authService = AuthService();
   final List<String> _titles = ["Cases", "Favorites", "Dashboard", "Notifications"];
 
   @override
@@ -203,16 +204,23 @@ class _TaskInfoScreenState extends State<TaskInfoScreen> with SingleTickerProvid
           ),
         ),
         floatingActionButton: FloatingActionButton(
-          // onPressed: () {
-          //   Navigator.pushReplacementNamed(context, '/home');
-          // },
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => HomeScreen(userName: "Karthi", userEmail: "Karthi@gmail.com"),
-              ),
-            );
+          onPressed: () async {
+            Map<String, String?> userData = await authService.getUserData();
+            if (userData['userName'] != null && userData['userEmail'] != null) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      HomeScreen(userName: userData['userName']!, userEmail: userData['userEmail']!),
+                ),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar( // Handle missing data explicitly
+                const SnackBar(
+                  content: Text('Error: Missing user information.'),
+                ),
+              );
+            }
           },
           backgroundColor: Colors.blue,
           elevation: 6,

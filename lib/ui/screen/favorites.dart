@@ -2,9 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_tms/ui/screen/task_details.dart';
+
 import 'package:flutter_tms/api/authService.dart';
 import './common/commonService.dart';
+import 'case_details.dart';
 
 class FavoritesScreen extends StatefulWidget {
   @override
@@ -133,7 +134,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => TaskDetailsScreen(task: task),
+                  builder: (context) => CaseDetailsScreen(task: task),
                 ),
               );
             },
@@ -225,7 +226,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => TaskDetailsScreen(task: task),
+                            builder: (context) => CaseDetailsScreen(task: task),
                           ),
                         );
                       },

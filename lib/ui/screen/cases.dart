@@ -7,7 +7,6 @@ import 'package:flutter_tms/ui/screen/case_details.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import './common/commonService.dart';
 import 'package:flutter_tms/api/authService.dart';
-import 'package:flutter_tms/data/jobs_data.dart';
 
 class CasesScreen extends StatefulWidget {
   @override
@@ -16,7 +15,7 @@ class CasesScreen extends StatefulWidget {
 
 class _CasesScreenState extends State<CasesScreen> {
 
-    List<Map<String, dynamic>> userCompanyCases = [];
+  List<Map<String, dynamic>> userCompanyCases = [];
   List<Map<String, dynamic>> caseTypes = [];
   bool isLoading = true;
   bool starred = false;
@@ -50,6 +49,9 @@ class _CasesScreenState extends State<CasesScreen> {
   Future<void> _loadSelectedCompanyIdFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     final selectedCompanyId = prefs.getInt('selected_company_id');
+
+    print('selected_company_id: $selectedCompanyId');
+
     setState(() {
       _selectedCompanyId = selectedCompanyId;
     });
@@ -71,6 +73,10 @@ class _CasesScreenState extends State<CasesScreen> {
           'Accept': 'application/json',
         },
       );
+
+      print('url: cases: $url');
+      print('response: cases: ${response.body}');
+
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
         final dynamic caseTypesData = responseData['data']['caseTypes'];
@@ -141,52 +147,11 @@ class _CasesScreenState extends State<CasesScreen> {
     return userCompanyCases.where((task) => task['isFavorite'] == true).toList();
   }
 
-  // Dummy list of tasks
-  // final List<Map<String, dynamic>> tasks = [
-  //   {
-  //     'name': 'Flutter Mobile App',
-  //     'jobType':'Web App',
-  //     'assignee': 'karthi Sk',
-  //     'startDate': '2024-11-01',
-  //     'endDate': '2024-11-10',
-  //     'details': 'Detailed description of Task 1',
-  //     'isFavorite': false,
-  //     'progress': 0.4, // Sample progress value (40%)
-  //   },
-  //   {
-  //     'name': 'Rotry and Diverty Valve',
-  //     'jobType':'Mobile App',
-  //     'assignee': 'Murali',
-  //     'startDate': '2024-11-02',
-  //     'endDate': '2024-11-11',
-  //     'details': 'Detailed description of Task 2',
-  //     'isFavorite': false,
-  //     'progress': 0.7, // Sample progress value (70%)
-  //   },
-  //   {
-  //     'name': 'Whatsapp Message Send Meta',
-  //     'jobType':'Mac App',
-  //     'assignee': 'Ajay',
-  //     'startDate': '2024-11-03',
-  //     'endDate': '2024-11-12',
-  //     'details': 'Detailed description of Task 3',
-  //     'isFavorite': false,
-  //     'progress': 0.9, // Sample progress value (90%)
-  //   },
-  // ];
-
   // Toggle favorite status
   void toggleFavorite(int index) {
     setState(() {
-      // tasks[index]['isFavorite'] = !tasks[index]['isFavorite'];
-      userCompanyCases[index]['starred'] =
-      !(userCompanyCases[index]['starred']);
+      userCompanyCases[index]['starred'] = !(userCompanyCases[index]['starred']);
     });
-  }
-
-  // Get the favorite tasks
-  List<Map<String, dynamic>> get favoriteTasks {
-    return tasks.where((task) => task['isFavorite'] == true).toList();
   }
 
   @override
@@ -198,19 +163,20 @@ class _CasesScreenState extends State<CasesScreen> {
 
     return Scaffold(
       backgroundColor: Colors.blue,
-      body: tasks.isEmpty
-            isLoading
+      body: isLoading
           ? Center(child: CircularProgressIndicator())
           : userCompanyCases.isEmpty
           ? Center(child: Text('No cases available.'))
-          // ? bodyWidget() // Show loading widget if tasks are empty
           : ListView.builder(
         padding: EdgeInsets.all(padding),
         itemCount: userCompanyCases.length,
         itemBuilder: (context, index) {
           final task = userCompanyCases[index];
           return GestureDetector(
-            onTap: () {
+            onTap: () async {
+              // final prefs = await SharedPreferences.getInstance();
+              // await prefs.setString('caseId', task['id']);
+              //
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -219,7 +185,7 @@ class _CasesScreenState extends State<CasesScreen> {
               );
             },
             child: Container(
-              margin: const EdgeInsets.symmetric(vertical: screenHeight * 0.01), // Vertical margin based on screen height
+              margin: EdgeInsets.symmetric(vertical: screenHeight * 0.01), // Vertical margin based on screen height
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(2),
@@ -296,11 +262,10 @@ class _CasesScreenState extends State<CasesScreen> {
                               SizedBox(width: screenWidth * 0.02),
                               Text(
                                 task['case_type'] ?? 'Job Type',
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: Colors.blue,
                                   fontSize: screenWidth < 600 ? 12 : 14, // Adjust font size based on screen size
                                 ),
-                              ),
                               ),
                             ],
                           ),
@@ -315,7 +280,7 @@ class _CasesScreenState extends State<CasesScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => CaseDetailsScreen(task: job),
+                            builder: (context) => CaseDetailsScreen(task: task),
                           ),
                         );
                       },
