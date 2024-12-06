@@ -44,3 +44,5 @@ app.*.map.json
 windows/flutter/generated_plugins.cmake
 .gitignore
 pubspec.lock
+pubspec.lock
+macos/Flutter/GeneratedPluginRegistrant.swift
