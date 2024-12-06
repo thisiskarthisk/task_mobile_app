@@ -760,6 +760,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
             ),
         ],
       ),
+
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
@@ -869,7 +870,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                 buildExpandableSection(
                   title: 'Attachments',
                   icon: Icons.attach_file,
-                  contentWidget: buildFileAtteachment(),
+                  contentWidget: buildFileAttachment(),
                 ),
 
                 // Activity Section
@@ -918,6 +919,58 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
       ),
     );
   }
+
+  // Function to create CircleAvatar with onTap that opens a modal showing the full name
+  Widget buildMemberAvatar(String initial, String fullName,String role, Color backgroundColor, Color foregroundColor) {
+    return GestureDetector(
+      onTap: () {
+        // Show a dialog with the full name
+        showDialog(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: Text('Member Details'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Name
+                  Text('Name', style: TextStyle(fontWeight: FontWeight.bold)),
+                  SizedBox(height: 4),
+                  Text(fullName, style: TextStyle(fontSize: 16)),
+                  Divider(height: 1, color: Colors.grey[400]),
+
+                  // Name and Role Gap
+                  SizedBox(height: 20,),
+
+                  // Role
+                  Text('Role', style: TextStyle(fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  Text(role, style: TextStyle(fontSize: 16)),
+                  Divider(height: 1, color: Colors.grey[400]),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop(); // Close the dialog
+                  },
+                  child: Text('Close'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+
+      child: CircleAvatar(
+        backgroundColor: backgroundColor,  // Set the background color dynamically
+        foregroundColor: foregroundColor,   // Set the text color dynamically
+        child: Text(initial),
+      ),
+    );
+  }
+
 
   // Calendar Info Section with Date and Time Pickers
   Widget buildCalendarInfoContent() {
@@ -1224,6 +1277,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
       },
     );
   }
+
 
   // Function to buildTaskCompletionSection
   Widget buildTaskCompletionSection() {
@@ -1720,53 +1774,158 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
         : Container(); // If text is empty, do not display anything (return an empty container)
   }
 
-  // Function to create CircleAvatar with onTap that opens a modal showing the full name
-  Widget buildMemberAvatar(String initial, String fullName,String role, Color backgroundColor, Color foregroundColor) {
-    return GestureDetector(
-      onTap: () {
-        // Show a dialog with the full name
-        showDialog(
-          context: context,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              title: Text('Member Details'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Name
-                  Text('Name', style: TextStyle(fontWeight: FontWeight.bold)),
-                  SizedBox(height: 4),
-                  Text(fullName, style: TextStyle(fontSize: 16)),
-                  Divider(height: 1, color: Colors.grey[400]),
 
-                  // Name and Role Gap
-                  SizedBox(height: 20,),
 
-                  // Role
-                  Text('Role', style: TextStyle(fontWeight: FontWeight.bold)),
-                  SizedBox(height: 8),
-                  Text(role, style: TextStyle(fontSize: 16)),
-                  Divider(height: 1, color: Colors.grey[400]),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop(); // Close the dialog
-                  },
-                  child: Text('Close'),
+
+  // buildFileAttachment function in listview
+  Widget buildFileAttachment() {
+    String currentDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    String currentTime = DateFormat('HH:mm:ss').format(DateTime.now());
+
+    return ListView.builder(
+      shrinkWrap: true,
+      itemCount: _attachments.length,
+      itemBuilder: (context, index) {
+        final attachment = _attachments[index]; // Assuming this is a Map or String
+        print("attachment: $attachment");
+
+        // Use MediaQuery to get the screen size
+        double screenWidth = MediaQuery.of(context).size.width;
+        double screenHeight = MediaQuery.of(context).size.height;
+        double iconSize = screenWidth * 0.07; // Adjust icon size based on screen width
+        double spacing = screenWidth * 0.02; // Adjust spacing based on screen width
+
+        return Card(
+          margin: EdgeInsets.symmetric(vertical: 10),
+          child: ListTile(
+            leading: Icon(Icons.file_copy, size: iconSize),
+            title: Text(
+              attachment,
+              style: TextStyle(fontSize: screenWidth * 0.03,fontWeight: FontWeight.bold), // Adjust font size dynamically
+            ),
+            subtitle: Row(
+              children: [
+                SizedBox(height: spacing * 5), // Space between date and time
+                Icon(Icons.calendar_today, size: iconSize * 0.7, color: Colors.grey),
+                SizedBox(width: spacing),
+                Text(
+                  currentDate,
+                  style: TextStyle(fontSize: screenWidth * 0.03),
+                ),
+                SizedBox(width: spacing * 2), // Space between date and time
+                Icon(Icons.access_time, size: iconSize * 0.7, color: Colors.grey), // Time Icon
+                SizedBox(width: spacing),
+                Text(
+                  currentTime,
+                  style: TextStyle(fontSize: screenWidth * 0.03),
                 ),
               ],
-            );
-          },
+            ),
+            trailing: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: screenWidth * 0.4), // Dynamic trailing width
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: FittedBox(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          GestureDetector(
+                            onTap: () => print("Download clicked"),
+                            child: Icon(Icons.download, size: iconSize * 0.8),
+                          ),
+                          SizedBox(width: spacing),
+                          GestureDetector(
+                            onTap: () => print("History clicked"),
+                            child: Icon(Icons.history, size: iconSize * 0.8),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(height: screenHeight * 0.01), // Adjust space between rows dynamically
+                  Flexible(
+                    child: FittedBox(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          GestureDetector(
+                            onTap: () => print("Edit clicked"),
+                            child: Icon(Icons.edit, size: iconSize * 0.8,color: Colors.blueAccent,),
+                          ),
+                          SizedBox(width: spacing),
+                          GestureDetector(
+                            onTap: () => print("Delete clicked"),
+                            child: Icon(Icons.delete, size: iconSize * 0.8,color: Colors.red,),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         );
       },
+    );
+  }
 
-      child: CircleAvatar(
-        backgroundColor: backgroundColor,  // Set the background color dynamically
-        foregroundColor: foregroundColor,   // Set the text color dynamically
-        child: Text(initial),
+
+  // Function to build Activity Section
+  Widget buildActivitySection() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10.0),
+            child: Row(
+              children: [
+                // Message Icon on the left
+                IconButton(
+                  icon: Icon(Icons.message, color: Colors.blue), onPressed: () {  },
+                ),
+
+                // TextField with placeholder text
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                    child: TextField(
+                      controller: _messageController,
+                      decoration: InputDecoration(
+                        hintText: "Enter the comment", // Placeholder text
+                        contentPadding: EdgeInsets.symmetric(vertical: 10.0, horizontal: 16.0),
+                        border: UnderlineInputBorder(
+                          borderSide: BorderSide(color: Colors.blue), // Underline style
+                        ),
+                        suffixIcon: IconButton(
+                          icon: Icon(Icons.send, color: Colors.blue),  // Send icon
+                          onPressed: () {
+                            // Action for send button, could be to send the message
+                            print('Message sent: ${_messageController.text}');
+                            _messageController.clear(); // Clear the text after sending
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Mic Icon on the right
+                IconButton(
+                  icon: Icon(Icons.mic, color: Colors.blue),
+                  onPressed: () {
+                    // Add functionality for mic icon, e.g., start voice recording
+                    print('Mic icon pressed');
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

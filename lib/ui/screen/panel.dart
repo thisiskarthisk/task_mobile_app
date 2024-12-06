@@ -109,7 +109,7 @@ class _PanelScreenState extends State<PanelScreen> {
           final panelName = panel['name'];
           await _panelService.getPanelDetails(appUrl, companyId, caseId, panelId); // Fetch additional info for each panel
           setState(() {
-            panels.add({'panelName': panelName, 'panelId': panelId});
+            panels.add({'panelName': panelName, 'panelId': panelId,'casesId':_caseId});
           });
         }
       } else {
