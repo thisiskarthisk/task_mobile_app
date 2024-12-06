@@ -6,9 +6,10 @@ import 'package:flutter_tms/ui/screen/auth/login.dart';
 import 'package:flutter_tms/ui/screen/notifications.dart';
 import 'package:flutter_tms/ui/screen/task_info.dart';
 import 'package:flutter_tms/api/authService.dart';
-import 'package:flutter_tms/api/api_config.dart';
+import 'package:flutter_tms/api/apiConfig.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import './common/commonService.dart';
+import '../../api/apiConfig.dart';
 
 class HomeScreen extends StatefulWidget {
   final String userName;
@@ -30,6 +31,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final AuthService _authService = AuthService();
   final commonService _service = commonService();
+  final ApiConfig _apiConfig = ApiConfig();
+
   List<Map<String, String >> instanceList = [];
   List<Map<String, String>> appsList = [];
   Map<String, dynamic>? companyDetails;
@@ -159,7 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final response = await http.get(
-        Uri.parse('$domainUrl/api/v1/user/companies'),
+        Uri.parse('$domainUrl${ApiConfig.companies}'),
         headers: {
           'Authorization': 'Bearer $_taskAccessToken',
           'Content-Type': 'application/json',

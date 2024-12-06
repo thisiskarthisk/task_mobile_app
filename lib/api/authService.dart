@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'api_config.dart';
+import 'apiConfig.dart';
 
 class AuthService {
   Future<Map<String, dynamic>> login(String email, String password) async {

@@ -1,13 +1,14 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_tms/ui/screen/panel_details.dart';
+import 'package:flutter_tms/ui/screen/panelTaskInfo.dart';
 import 'package:flutter_tms/ui/screen/panel_info.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../api/api_config.dart';
 import '../../api/authService.dart';
+import '../../api/apiConfig.dart';
+import '../screen/panelService.dart';
 import 'common/commonService.dart';
 
 class PanelScreen extends StatefulWidget {
@@ -29,6 +30,9 @@ class _PanelScreenState extends State<PanelScreen> {
 
   final commonService _service = commonService();
   final AuthService _authService = AuthService();
+  final panelService _panelService = panelService();
+  final ApiConfig _apiConfig = ApiConfig();
+
   final TextEditingController _taskNameController = TextEditingController();
 
   List<Map<String, dynamic>> panels = [];
@@ -71,7 +75,7 @@ class _PanelScreenState extends State<PanelScreen> {
       final domainUrl = instance['domain_url'];
       if (domainUrl != null) {
         _appUrl = domainUrl;
-        await _getPanelInfo(domainUrl);
+        _fetchCompanyCasePanelInfo();
         await _getCasesTasks(domainUrl);
       }
     }
@@ -85,67 +89,37 @@ class _PanelScreenState extends State<PanelScreen> {
     });
   }
 
-  Future<void> _getPanelInfo(String domainUrl) async {
+  Future<void> _fetchCompanyCasePanelInfo() async {
+    String? appUrl = _appUrl;
+    int? companyId = _selectedCompanyId;
+    int? caseId = _caseId;
+
+    if (appUrl == null || companyId == null || caseId == null) {
+      print('Error: Missing required parameters for API call.');
+      return;
+    }
+
     try {
-      final panelInfo = await http.get(
-        Uri.parse('$domainUrl/api/v1/user/company/case/panels?companyId=$_selectedCompanyId&caseId=$_caseId'),
-        headers: {
-          'Authorization': 'Bearer $_idt',
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      );
+      final casePanelRes = await _panelService.getCompanyCasePanels(appUrl, companyId, caseId);
 
-      if (panelInfo.statusCode == 200) {
-        final data = json.decode(panelInfo.body);
-
-        if (data['success'] == true && data['data'] != null) {
-          final List<dynamic> fetchedPanels = data['data']['panels'];
-
-          for (var panel in fetchedPanels) {
-            final panelId = panel['id'];
-            final panelName = panel['name'];
-            await _getPanelDetails(domainUrl, panelId); // Fetch additional info for each panel
-            setState(() {
-              panels.add({'panelName': panelName, 'panelId': panelId});
-            });
-          }
-
-        } else {
-          print('Error: Invalid response format');
+      if (casePanelRes['success'] == true && casePanelRes['data'] != null) {
+        final List<dynamic> fetchedPanels = casePanelRes['data']['panels'];
+        for (var panel in fetchedPanels) {
+          final panelId = panel['id'];
+          final panelName = panel['name'];
+          await _panelService.getPanelDetails(appUrl, companyId, caseId, panelId); // Fetch additional info for each panel
+          setState(() {
+            panels.add({'panelName': panelName, 'panelId': panelId});
+          });
         }
       } else {
-        print('Error: Failed to fetch panels (status code: ${panelInfo.statusCode})');
+        throw Exception('Error: Invalid response format');
       }
-      print('panelInfo: response: ${panelInfo.body}');
-
     } catch (e) {
-      print('Error fetching panel info: $e');
+      throw Exception('Error fetching panel info: $e');
     }
   }
 
-  Future<void> _getPanelDetails(String domainUrl, int panelId) async {
-    try {
-      final panelDetails = await http.get(
-        Uri.parse(
-            '$domainUrl/api/v1/user/company/case/panel/info?companyId=$_selectedCompanyId&caseId=$_caseId&panelId=$panelId'),
-        headers: {
-          'Authorization': 'Bearer $_idt',
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-      );
-
-      if (panelDetails.statusCode == 200) {
-        final detailsData = json.decode(panelDetails.body);
-        print('Panel ID $panelId details: $detailsData');
-      } else {
-        print('Error: Failed to fetch panel details (status code: ${panelDetails.statusCode})');
-      }
-    } catch (e) {
-      print('Error fetching panel details for panel ID $panelId: $e');
-    }
-  }
   // Helper method to assign colors based on the first letter of the name
   Color _getLetterColor(String letter) {
     final colors = [
@@ -192,7 +166,7 @@ class _PanelScreenState extends State<PanelScreen> {
 
     try {
       final casesTasksDetails = await http.get(
-        Uri.parse('$domainUrl/api/v1/user/company/case/tasks?companyId=$_selectedCompanyId&caseId=$_caseId'+'${(showClosedTasks ? '&showClosedTasks=yes' : '')}'),
+        Uri.parse('$domainUrl${ApiConfig.caseTasks}?companyId=$_selectedCompanyId&caseId=$_caseId'+'${(showClosedTasks ? '&showClosedTasks=yes' : '')}'),
         headers: {
           'Authorization': 'Bearer $_idt',
           'Content-Type': 'application/json',
@@ -204,8 +178,7 @@ class _PanelScreenState extends State<PanelScreen> {
         final detailsData = json.decode(casesTasksDetails.body);
         print(' details: $detailsData');
         if (detailsData['data']['panels'] != null) {
-          // Extract and process tasks
-          final List<Map<String, dynamic>> newTaskData = [];
+          final List<Map<String, dynamic>> newTaskData = []; // Extract and process tasks
 
           for (var panel in detailsData['data']['panels']) {
             for (var task in panel['tasks']) {
@@ -216,9 +189,13 @@ class _PanelScreenState extends State<PanelScreen> {
                 'task': task['name'],
                 'avatar': {
                   'text': firstLetter.isNotEmpty ? firstLetter : '?',
-                  'backgroundColor': _getLetterColor(firstLetter),
+                  'backgroundColor': Colors.blue,
                 },
                 'panelId': panel['id'],
+                'companyId': _selectedCompanyId,
+                'caseId': _caseId,
+                'taskId': task['id'],
+                'appUrl': _appUrl,
               });
             }
           }
@@ -237,13 +214,12 @@ class _PanelScreenState extends State<PanelScreen> {
   }
 
   Future<void> _addTask(int panelId, String taskName, int taskType) async {
-    print('taskName: $taskName, panelId: $panelId, taskType: $taskType');
     setState(() {
       isAddTaskLoading = true;
     });
 
     try {
-      final addTaskUrl = '$_appUrl/api/v1/user/company/case/panel/task/add'; // API Endpoint for adding a task
+      final addTaskUrl = '$_appUrl${ApiConfig.panelTaskAdd}'; // API Endpoint for adding a task
       final requestBody = {
         'companyId': _selectedCompanyId,
         'caseId': _caseId,
@@ -267,10 +243,12 @@ class _PanelScreenState extends State<PanelScreen> {
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
         if (responseData['success'] == true) {
-          print('Task added successfully: $taskName');
           setState(() {
             isAddTaskLoading = false;
+
+            _getCasesTasks(_appUrl!);
           });
+
 
         } else {
           print('Failed to add task: ${responseData['message']}');

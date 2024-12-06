@@ -7,6 +7,7 @@ import 'package:flutter_tms/ui/screen/case_details.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import './common/commonService.dart';
 import 'package:flutter_tms/api/authService.dart';
+import '../../api/apiConfig.dart';
 
 class CasesScreen extends StatefulWidget {
   @override
@@ -24,6 +25,7 @@ class _CasesScreenState extends State<CasesScreen> {
 
   final AuthService _authService = AuthService();
   final commonService _service = commonService();
+  final ApiConfig _apiConfig = ApiConfig();
 
   @override
   void initState() {
@@ -64,7 +66,7 @@ class _CasesScreenState extends State<CasesScreen> {
       _taskAccessToken = taskAccessToken;
     });
     try {
-      final String url = '$domainUrl/api/v1/user/company/casetypes?companyId=$_selectedCompanyId';
+      final String url = '$domainUrl${ApiConfig.companyCaseTypes}?companyId=$_selectedCompanyId';
       final response = await http.get(
         Uri.parse(url),
         headers: {
@@ -112,7 +114,7 @@ class _CasesScreenState extends State<CasesScreen> {
       if (starred) {
         params += "&starred=1";
       }
-      final String url = '$domainUrl/api/v1/user/company/cases?companyId=$_selectedCompanyId$params';
+      final String url = '$domainUrl${ApiConfig.companyCases}?companyId=$_selectedCompanyId$params';
       final response = await http.get(
         Uri.parse(url),
         headers: {

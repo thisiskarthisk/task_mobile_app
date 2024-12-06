@@ -68,15 +68,6 @@ class _PanelInfoScreenState extends State<PanelInfoScreen> {
                           ),
                         ],
                       ),
-                      // SizedBox(height: screenHeight * 0.02), // Adjustable spacing
-
-                      // Text(
-                      //   task['description'] ?? 'No description available.',
-                      //   style: TextStyle(
-                      //     fontSize: fontSizeContent, // Adjust text size
-                      //     color: Colors.black87,
-                      //   ),
-                      // ),
                     ],
                   ),
                 ),
