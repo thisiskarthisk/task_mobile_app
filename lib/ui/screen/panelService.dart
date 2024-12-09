@@ -91,8 +91,6 @@ class panelService {
         body: json.encode(data),
       );
 
-      print('taskInfo: ${taskInfo.body}');
-
       if (taskInfo.statusCode == 200) {
         return json.decode(taskInfo.body);
       } else {

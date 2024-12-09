@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_tms/ui/screen/panel_details.dart';
+import 'package:flutter_tms/ui/screen/panelTaskInfo.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;

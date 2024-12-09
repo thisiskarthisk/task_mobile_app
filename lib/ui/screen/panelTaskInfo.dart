@@ -53,11 +53,11 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
   final TextEditingController _taskNameController = TextEditingController();
   TextEditingController? _newCheckListGroupNameController;
 
-  int? companyId, caseId, panelId, taskId, completionTypeValue, approvalRequiredValue;
+  int? companyId, caseId, panelId, taskId, completionTypeValue, approvalRequiredValue, TaskAssignee;
 
   String? appUrl, description = '', startDueDate = '', selectedPriority, selectedTaskCompletionType, selectedReminderUnit,
       selectedApprovalRequired, taskCompletionTypeManual, approvalRequiredYes, autoStartTaskValue, nameValue, name2Value,
-      autoStartTask, currentEditingField, reminderDuration, _fileName, _filePath;
+      autoStartTask, currentEditingField, reminderDuration, TaskApprover, _fileName, _filePath;
 
   // State to track unsaved changes
   bool hasUnsavedChanges = false;
@@ -162,6 +162,9 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
 
         taskCompletionTypeManual = taskCodeLists['taskCompletionType'][taskDetails['taskCompletionTypeManual'].toString()];
         approvalRequiredYes = taskCodeLists['approvalRequired'][taskDetails['approvalRequiredYes'].toString()];
+        approvalRequiredValue = taskDetails['approvalRequired'];
+        TaskAssignee = taskDetails['assignee'];
+        TaskApprover = taskDetails['approver'].toString();
 
         checklist = List<ChecklistItem>.from(checklistData.map((item) => ChecklistItem.fromJson(item)));
 
@@ -288,6 +291,19 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                 'fieldValue': priority
               };
             }
+            break;
+          case 'taskCompletionType':
+            data = {
+              'fieldName': 'completionType',
+              'fieldValue': completionTypeValue
+            };
+            break;
+          case 'approvalType':
+            print('approvalRequiredValue: $approvalRequiredValue');
+            data = {
+              'fieldName': 'approvalType',
+              'fieldValue': approvalRequiredValue
+            };
             break;
           case 'checkListGroup':
             String groupName = _getCurrEditingValue('checkListGroup');
@@ -1326,6 +1342,8 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                               onChanged: (int? newValue) {
                                 setState(() {
                                   completionTypeValue = newValue;
+                                  currentEditingField = 'taskCompletionType';
+                                  _onBtnSaveTaskInfoClicked();
                                 });
                               },
                             ),
@@ -1355,19 +1373,28 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                       children: taskApprovalRequired.entries.map((entry) {
                         int value = int.parse(entry.key);
                         String label = entry.value;
-                        approvalRequiredValue = int.parse(
-                            taskApprovalRequired.entries
-                                .firstWhere((entry) => entry.value == (selectedApprovalRequired != null ? selectedApprovalRequired : approvalRequiredYes))
-                                .key
-                        );
+
+                        // approvalRequiredValue = int.parse(
+                        //     taskApprovalRequired.entries
+                        //         .firstWhere((entry) => entry.value == (selectedApprovalRequired != null ? selectedApprovalRequired : approvalRequiredYes))
+                        //         .key
+                        // );
+
+                        print('approvalRequiredValue: $approvalRequiredValue');
+
                         return Row(
                           children: [
                             Radio<int>(
                               value: value,
                               groupValue: approvalRequiredValue,
                               onChanged: (int? newValue) {
+                                print('approvalRequiredValue: $approvalRequiredValue');
+
                                 setState(() {
                                   approvalRequiredValue = newValue;
+                                  // selectedApprovalRequired = label;
+                                  currentEditingField = 'approvalType';
+                                  _onBtnSaveTaskInfoClicked();
                                 });
                               },
                             ),
@@ -1422,27 +1449,24 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SizedBox(height: 8),
-                    DropdownButton<String>(
-                      value: nameValue,
-                      items: <String>['John', 'Doe', 'Jane']
-                          .map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          nameValue = newValue;
-                        });
-                      },
-                      hint: Text('Select Name'),
-                    ),
+                    if (TaskAssignee != null)
+                      DropdownButton<int>(
+                        value: TaskAssignee, // Default selected value or null if no match
+                        items: members.map<DropdownMenuItem<int>>((member) {
+                          return DropdownMenuItem<int>(
+                            value: member['id'] as int,
+                            child: Text(member['name'] ?? 'Unknown'),
+                          );
+                        }).toList(),
+                        onChanged: (int? newValue) {
+                          setState(() {
+                            TaskAssignee = newValue; // Update the task value
+                          });
+                        },
+                      ),
                   ],
                 ),
               ),
-
-
             ],
           ),
           SizedBox(height: 20),
@@ -1457,22 +1481,21 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SizedBox(height: 8),
-                    DropdownButton<String>(
-                      value: name2Value,
-                      items: <String>['John', 'Doe', 'Jane']
-                          .map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          name2Value = newValue;
-                        });
-                      },
-                      hint: Text('Select Name 2'),
-                    ),
+                    if (TaskApprover != null)
+                      DropdownButton<String>(
+                        value: TaskApprover, // Default selected value or null if no match
+                        items: members.map<DropdownMenuItem<String>>((member) {
+                          return DropdownMenuItem<String>(
+                            value: member['id'].toString(),
+                            child: Text(member['name'] ?? 'Unknown'),
+                          );
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            TaskApprover = newValue; // Update the task value
+                          });
+                        },
+                      ),
                   ],
                 ),
               ),
@@ -1875,58 +1898,58 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
 
 
   // Function to build Activity Section
-  Widget buildActivitySection() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10.0),
-            child: Row(
-              children: [
-                // Message Icon on the left
-                IconButton(
-                  icon: Icon(Icons.message, color: Colors.blue), onPressed: () {  },
-                ),
-
-                // TextField with placeholder text
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: TextField(
-                      controller: _messageController,
-                      decoration: InputDecoration(
-                        hintText: "Enter the comment", // Placeholder text
-                        contentPadding: EdgeInsets.symmetric(vertical: 10.0, horizontal: 16.0),
-                        border: UnderlineInputBorder(
-                          borderSide: BorderSide(color: Colors.blue), // Underline style
-                        ),
-                        suffixIcon: IconButton(
-                          icon: Icon(Icons.send, color: Colors.blue),  // Send icon
-                          onPressed: () {
-                            // Action for send button, could be to send the message
-                            print('Message sent: ${_messageController.text}');
-                            _messageController.clear(); // Clear the text after sending
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Mic Icon on the right
-                IconButton(
-                  icon: Icon(Icons.mic, color: Colors.blue),
-                  onPressed: () {
-                    // Add functionality for mic icon, e.g., start voice recording
-                    print('Mic icon pressed');
-                  },
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // Widget buildActivitySection() {
+  //   return Padding(
+  //     padding: const EdgeInsets.symmetric(vertical: 8.0),
+  //     child: Column(
+  //       children: [
+  //         Padding(
+  //           padding: const EdgeInsets.symmetric(vertical: 10.0),
+  //           child: Row(
+  //             children: [
+  //               // Message Icon on the left
+  //               IconButton(
+  //                 icon: Icon(Icons.message, color: Colors.blue), onPressed: () {  },
+  //               ),
+  //
+  //               // TextField with placeholder text
+  //               Expanded(
+  //                 child: Padding(
+  //                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
+  //                   child: TextField(
+  //                     controller: _messageController,
+  //                     decoration: InputDecoration(
+  //                       hintText: "Enter the comment", // Placeholder text
+  //                       contentPadding: EdgeInsets.symmetric(vertical: 10.0, horizontal: 16.0),
+  //                       border: UnderlineInputBorder(
+  //                         borderSide: BorderSide(color: Colors.blue), // Underline style
+  //                       ),
+  //                       suffixIcon: IconButton(
+  //                         icon: Icon(Icons.send, color: Colors.blue),  // Send icon
+  //                         onPressed: () {
+  //                           // Action for send button, could be to send the message
+  //                           print('Message sent: ${_messageController.text}');
+  //                           _messageController.clear(); // Clear the text after sending
+  //                         },
+  //                       ),
+  //                     ),
+  //                   ),
+  //                 ),
+  //               ),
+  //
+  //               // Mic Icon on the right
+  //               IconButton(
+  //                 icon: Icon(Icons.mic, color: Colors.blue),
+  //                 onPressed: () {
+  //                   // Add functionality for mic icon, e.g., start voice recording
+  //                   print('Mic icon pressed');
+  //                 },
+  //               ),
+  //             ],
+  //           ),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 }
