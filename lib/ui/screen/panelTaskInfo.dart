@@ -53,11 +53,11 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
   final TextEditingController _taskNameController = TextEditingController();
   TextEditingController? _newCheckListGroupNameController;
 
-  int? companyId, caseId, panelId, taskId, completionTypeValue, approvalRequiredValue, TaskAssignee;
+  int? companyId, caseId, panelId, taskId, completionTypeValue, TaskAssignee;
 
   String? appUrl, description = '', startDueDate = '', selectedPriority, selectedTaskCompletionType, selectedReminderUnit,
-      selectedApprovalRequired, taskCompletionTypeManual, approvalRequiredYes, autoStartTaskValue, nameValue, name2Value,
-      autoStartTask, currentEditingField, reminderDuration, TaskApprover, _fileName, _filePath;
+      selectedApprovalRequired, taskCompletionTypeManual, autoStartTaskValue, nameValue, name2Value,
+      autoStartTask, currentEditingField, reminderDuration, TaskApprover, selectedTaskApprovalType, selectedTaskCompletionAuto, selectedLinkedTask, _fileName, _filePath;
 
   // State to track unsaved changes
   bool hasUnsavedChanges = false;
@@ -72,6 +72,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
   late TextEditingController _endTimeController = TextEditingController();
 
   List<dynamic> members = [];
+  // List<dynamic> taskCompletionAuto = [];
   Map<String, dynamic>? taskCodelists;
   Map<String, dynamic> currEditingFieldValue = {};
   List<ChecklistItem> checklist = [];
@@ -141,6 +142,10 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
       }
 
       taskDetails = taskInfo['data']['taskInfo'];
+
+      print('taskDetails:');
+      print(taskDetails);
+
       var taskCodeLists = taskInfo['data']['codelists'];
       var checklistData = taskInfo['data']['checklist'] ?? [];
 
@@ -161,8 +166,9 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
         selectedApprovalRequired = taskCodeLists['approvalRequired'][taskDetails['approvalRequired'].toString()];
 
         taskCompletionTypeManual = taskCodeLists['taskCompletionType'][taskDetails['taskCompletionTypeManual'].toString()];
-        approvalRequiredYes = taskCodeLists['approvalRequired'][taskDetails['approvalRequiredYes'].toString()];
-        approvalRequiredValue = taskDetails['approvalRequired'];
+        selectedTaskApprovalType = (taskDetails['approvalType'] == null || taskDetails['approvalType'].toString().isEmpty) ? '': taskDetails['approvalType'].toString();
+        selectedTaskCompletionAuto = (taskDetails['taskCompletionType'] == null || taskDetails['taskCompletionType'].toString().isEmpty) ? '' : taskDetails['taskCompletionType'].toString();
+        selectedLinkedTask = (taskDetails['linkedTask'] == null || taskDetails['linkedTask'].toString().isEmpty) ? '' : taskDetails['linkedTask'].toString();
         TaskAssignee = taskDetails['assignee'];
         TaskApprover = taskDetails['approver'].toString();
 
@@ -299,12 +305,23 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
             };
             break;
           case 'approvalType':
-            print('approvalRequiredValue: $approvalRequiredValue');
             data = {
               'fieldName': 'approvalType',
-              'fieldValue': approvalRequiredValue
+              'fieldValue': selectedTaskApprovalType
             };
             break;
+          // case 'approver':
+          //   List<int> approver = _getCurrEditingValue('approver');
+          //   var approvalType = _taskInfo.approvalType;
+          //
+          //   data = {
+          //     'fieldName': 'approver',
+          //     'fieldValue': {
+          //       'approver':approver,
+          //       'approvalType':approvalType
+          //     }
+          //   };
+          //   break;
           case 'checkListGroup':
             String groupName = _getCurrEditingValue('checkListGroup');
 
@@ -1282,7 +1299,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                   icon: Icon(Icons.delete),
                   onPressed: () {
                     setState(() {
-                      _attachments.removeAt(index);  // Remove the selected attachment
+                      _attachments.removeAt(index);
                     });
                   },
                 ),
@@ -1294,8 +1311,6 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     );
   }
 
-
-  // Function to buildTaskCompletionSection
   Widget buildTaskCompletionSection() {
     if (taskCodelists == null) {
       return Center(child: CircularProgressIndicator());
@@ -1303,16 +1318,17 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
 
     Map<String, String> taskCompletionType = taskCodelists!['taskCompletionType'].cast<String, String>();
     Map<String, String> taskApprovalRequired = taskCodelists!['approvalRequired'].cast<String, String>();
+    Map<String, String> taskCompletionAuto = taskCodelists!['taskCompletionAuto'].cast<String, String>();
+    Map<String, String> linkedTasks = taskCodelists!['linkedTasks'].cast<String, String>();
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Row for Completion Type and Approval Required
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Left Side - Completion Type with radio buttons
               Expanded(
                 flex: 1,
                 child: Column(
@@ -1357,7 +1373,46 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
               ),
               SizedBox(width: 20),
 
-              // Right Side - Approval Required with radio buttons
+              if (completionTypeValue == 2)
+              Expanded(
+                flex: 1,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Complete Task Automatically At',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 8),
+                    DropdownButton<String>(
+                      value: selectedTaskCompletionAuto,
+                      items: taskCompletionAuto.entries.map((entry) {
+                        String value = entry.key;
+                        String label = entry.value;
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(label),
+                        );
+                      }).toList(),
+                      onChanged: (String? newValue) {
+                        setState(() {
+                          selectedTaskCompletionAuto = newValue;
+                        });
+                      },
+                      hint: Text('--Select--'),
+                    ),
+                  ],
+                ),
+              ),
+              if (completionTypeValue == 2)
+              SizedBox(width: 20),
+            ],
+          ),
+          SizedBox(height: 20),
+
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Expanded(
                 flex: 1,
                 child: Column(
@@ -1371,28 +1426,17 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: taskApprovalRequired.entries.map((entry) {
-                        int value = int.parse(entry.key);
+                        String value = entry.key;
                         String label = entry.value;
-
-                        // approvalRequiredValue = int.parse(
-                        //     taskApprovalRequired.entries
-                        //         .firstWhere((entry) => entry.value == (selectedApprovalRequired != null ? selectedApprovalRequired : approvalRequiredYes))
-                        //         .key
-                        // );
-
-                        print('approvalRequiredValue: $approvalRequiredValue');
 
                         return Row(
                           children: [
-                            Radio<int>(
+                            Radio<String>(
                               value: value,
-                              groupValue: approvalRequiredValue,
-                              onChanged: (int? newValue) {
-                                print('approvalRequiredValue: $approvalRequiredValue');
-
+                              groupValue: selectedTaskApprovalType,
+                              onChanged: (String? newValue) {
                                 setState(() {
-                                  approvalRequiredValue = newValue;
-                                  // selectedApprovalRequired = label;
+                                  selectedTaskApprovalType = newValue != null ? newValue.toString() : null;
                                   currentEditingField = 'approvalType';
                                   _onBtnSaveTaskInfoClicked();
                                 });
@@ -1406,44 +1450,8 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                   ],
                 ),
               ),
-            ],
-          ),
 
-          SizedBox(height: 20),
-
-          // Row for Auto Start Task and Name Dropdowns
-          Row(
-            children: [
-              // Left side - Auto Start Task Dropdown
-              Expanded(
-                flex: 1,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(height: 8),
-                    DropdownButton<String>(
-                      value: autoStartTaskValue,
-                      items: <String>['Option 1', 'Option 2', 'Option 3']
-                          .map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          autoStartTaskValue = newValue;
-                        });
-                      },
-                      hint: Text('Auto Start Task'),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(width: 20),
-
-              // Right side - Name Dropdown
-              Expanded(
+              /*Expanded(
                 flex: 1,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1451,7 +1459,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                     SizedBox(height: 8),
                     if (TaskAssignee != null)
                       DropdownButton<int>(
-                        value: TaskAssignee, // Default selected value or null if no match
+                        value: TaskAssignee,
                         items: members.map<DropdownMenuItem<int>>((member) {
                           return DropdownMenuItem<int>(
                             value: member['id'] as int,
@@ -1460,53 +1468,148 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                         }).toList(),
                         onChanged: (int? newValue) {
                           setState(() {
-                            TaskAssignee = newValue; // Update the task value
+                            TaskAssignee = newValue;
                           });
                         },
                       ),
+                  ],
+                ),
+              ),*/
+
+              if (selectedTaskApprovalType != null && selectedTaskApprovalType == '1')
+              Expanded(
+                flex: 1,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Approver',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 0),
+                    if (members.isNotEmpty)
+                      DropdownButton<String>(
+                        value: members.any((member) => member['id'].toString() == TaskApprover)
+                            ? TaskApprover
+                            : null,
+                        items: members.map<DropdownMenuItem<String>>((member) {
+                          return DropdownMenuItem<String>(
+                            value: member['id']?.toString(),
+                            child: Text(member['name'] ?? 'Unknown'),
+                          );
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            TaskApprover = newValue;
+                          });
+                        },
+                        hint: Text('Select a Member'),
+                        isExpanded: true,
+                      )
+                    else
+                      Text('No approvers available'),
                   ],
                 ),
               ),
             ],
           ),
           SizedBox(height: 20),
-          // Row for Auto Start Task and Name Dropdowns
+
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (selectedTaskApprovalType != null && selectedTaskApprovalType == '1')
+                Expanded(
+                  flex: 1,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Linked Task',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 0),
+                      if (linkedTasks.isNotEmpty)
+                        DropdownButton<String>(
+                          value: linkedTasks.containsKey(selectedLinkedTask) ? selectedLinkedTask : null,
+                          items: linkedTasks.entries.map((entry) {
+                            String value = entry.key;
+                            String label = entry.value;
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(label),
+                            );
+                          }).toList(),
+                          onChanged: (String? newValue) {
+                            setState(() {
+                              selectedLinkedTask = newValue;
+                            });
+                          },
+                          hint: Text('--Select a Task--'),
+                          isExpanded: true,
+                        ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          SizedBox(height: 20),
+
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (selectedTaskApprovalType != null && selectedTaskApprovalType == '1')
+                Expanded(
+                  flex: 1,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'On Completion of task, Automatically Start',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 0),
+                      if (members.isNotEmpty)
+                        DropdownButton<String>(
+                          value: members.any((member) => member['id'].toString() == TaskApprover)
+                              ? TaskApprover
+                              : null,
+                          items: members.map<DropdownMenuItem<String>>((member) {
+                            return DropdownMenuItem<String>(
+                              value: member['id']?.toString(),
+                              child: Text(member['name'] ?? 'Unknown'),
+                            );
+                          }).toList(),
+                          onChanged: (String? newValue) {
+                            setState(() {
+                              TaskApprover = newValue;
+                            });
+                          },
+                          hint: Text('Select a Member'),
+                          isExpanded: true,
+                        )
+                      else
+                        Text('No approvers available'),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          SizedBox(height: 20),
+
+          /*Row(
             children: [
               Expanded(child: Column()),
               // Right side - Name 2 Dropdown
-              Expanded(
-                flex: 1,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(height: 8),
-                    if (TaskApprover != null)
-                      DropdownButton<String>(
-                        value: TaskApprover, // Default selected value or null if no match
-                        items: members.map<DropdownMenuItem<String>>((member) {
-                          return DropdownMenuItem<String>(
-                            value: member['id'].toString(),
-                            child: Text(member['name'] ?? 'Unknown'),
-                          );
-                        }).toList(),
-                        onChanged: (String? newValue) {
-                          setState(() {
-                            TaskApprover = newValue; // Update the task value
-                          });
-                        },
-                      ),
-                  ],
-                ),
-              ),
+
+
             ],
-          ),
+          ),*/
         ],
       ),
     );
   }
 
-  // Function to build Activity Section
   Widget buildActivitySection() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -1516,28 +1619,25 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
             padding: const EdgeInsets.symmetric(vertical: 10.0),
             child: Row(
               children: [
-                // Message Icon on the left
                 IconButton(
                   icon: Icon(Icons.message, color: Colors.blue), onPressed: () {  },
                 ),
 
-                // TextField with placeholder text
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
                     child: TextField(
                       controller: _messageController,
                       decoration: InputDecoration(
-                        hintText: "Enter the comment", // Placeholder text
+                        hintText: "Enter the comment",
                         contentPadding: EdgeInsets.symmetric(vertical: 10.0, horizontal: 16.0),
                         border: UnderlineInputBorder(
-                          borderSide: BorderSide(color: Colors.blue), // Underline style
+                          borderSide: BorderSide(color: Colors.blue),
                         ),
                         suffixIcon: IconButton(
-                          icon: Icon(Icons.send, color: Colors.blue),  // Send icon
+                          icon: Icon(Icons.send, color: Colors.blue),
                           onPressed: () {
-                            // Action for send button, could be to send the message
-                            _messageController.clear(); // Clear the text after sending
+                            _messageController.clear();
                           },
                         ),
                       ),
@@ -1895,61 +1995,4 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
       },
     );
   }
-
-
-  // Function to build Activity Section
-  // Widget buildActivitySection() {
-  //   return Padding(
-  //     padding: const EdgeInsets.symmetric(vertical: 8.0),
-  //     child: Column(
-  //       children: [
-  //         Padding(
-  //           padding: const EdgeInsets.symmetric(vertical: 10.0),
-  //           child: Row(
-  //             children: [
-  //               // Message Icon on the left
-  //               IconButton(
-  //                 icon: Icon(Icons.message, color: Colors.blue), onPressed: () {  },
-  //               ),
-  //
-  //               // TextField with placeholder text
-  //               Expanded(
-  //                 child: Padding(
-  //                   padding: const EdgeInsets.symmetric(horizontal: 8.0),
-  //                   child: TextField(
-  //                     controller: _messageController,
-  //                     decoration: InputDecoration(
-  //                       hintText: "Enter the comment", // Placeholder text
-  //                       contentPadding: EdgeInsets.symmetric(vertical: 10.0, horizontal: 16.0),
-  //                       border: UnderlineInputBorder(
-  //                         borderSide: BorderSide(color: Colors.blue), // Underline style
-  //                       ),
-  //                       suffixIcon: IconButton(
-  //                         icon: Icon(Icons.send, color: Colors.blue),  // Send icon
-  //                         onPressed: () {
-  //                           // Action for send button, could be to send the message
-  //                           print('Message sent: ${_messageController.text}');
-  //                           _messageController.clear(); // Clear the text after sending
-  //                         },
-  //                       ),
-  //                     ),
-  //                   ),
-  //                 ),
-  //               ),
-  //
-  //               // Mic Icon on the right
-  //               IconButton(
-  //                 icon: Icon(Icons.mic, color: Colors.blue),
-  //                 onPressed: () {
-  //                   // Add functionality for mic icon, e.g., start voice recording
-  //                   print('Mic icon pressed');
-  //                 },
-  //               ),
-  //             ],
-  //           ),
-  //         ),
-  //       ],
-  //     ),
-  //   );
-  // }
 }
