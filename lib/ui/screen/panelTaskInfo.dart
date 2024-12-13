@@ -1,5 +1,5 @@
 import 'dart:async';
-
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_tms/ui/screen/panel.dart';
 import 'package:flutter_tms/ui/widgets/custom_expansion_tile.dart' as customExpansionTile;
@@ -7,6 +7,9 @@ import 'package:intl/intl.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:file_picker/file_picker.dart';
 import '../screen/panelService.dart';
+// import 'package:url_launcher/url_launcher.dart';
+import 'package:path/path.dart' as path;  // For path manipulation, use an alias to avoid conflicts
+
 
 class PanelDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> task;
@@ -53,11 +56,12 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
   final TextEditingController _taskNameController = TextEditingController();
   TextEditingController? _newCheckListGroupNameController;
 
-  int? companyId, caseId, panelId, taskId, completionTypeValue, TaskAssignee;
+
+  int? companyId, caseId, panelId, taskId, completionTypeValue, approvalRequiredValue ,_editingAttachmentIndex = -1, _deletingAttachmentIndex = -1;
 
   String? appUrl, description = '', startDueDate = '', selectedPriority, selectedTaskCompletionType, selectedReminderUnit,
-      selectedApprovalRequired, taskCompletionTypeManual, autoStartTaskValue, nameValue, name2Value,
-      autoStartTask, currentEditingField, reminderDuration, TaskApprover, selectedTaskApprovalType, selectedTaskCompletionAuto, selectedLinkedTask, _fileName, _filePath;
+      selectedApprovalRequired, taskCompletionTypeManual, approvalRequiredYes, autoStartTaskValue, nameValue, name2Value,
+      autoStartTask, currentEditingField, reminderDuration, _fileName, _filePath;
 
   // State to track unsaved changes
   bool hasUnsavedChanges = false;
@@ -72,13 +76,18 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
   late TextEditingController _endTimeController = TextEditingController();
 
   List<dynamic> members = [];
-  // List<dynamic> taskCompletionAuto = [];
   Map<String, dynamic>? taskCodelists;
   Map<String, dynamic> currEditingFieldValue = {};
   List<ChecklistItem> checklist = [];
-  List<String> _attachments = [];
 
+  // File Attachment
+  List<dynamic> _attachments = [];
+  Map<String, String>? _selectedFile;
   Timer? _keyboardTimer;
+  // late File newAttachingFile;
+  PlatformFile? newAttachingFile;  // Declare as nullable to safely check if it's initialized
+
+
 
   @override
   void initState() {
@@ -141,17 +150,16 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
         return;
       }
 
+      print("taskInfo : ${taskInfo['data']['attachments']}");
+
       taskDetails = taskInfo['data']['taskInfo'];
-
-      print('taskDetails:');
-      print(taskDetails);
-
       var taskCodeLists = taskInfo['data']['codelists'];
       var checklistData = taskInfo['data']['checklist'] ?? [];
 
       setState(() {
         members = taskInfo['data']['members'] ?? [];
         description = taskDetails['description'] ?? 'No description available.';
+        _attachments = taskInfo['data']['attachments'] ?? [];
 
         // Set the date and time values if they are available
         _startDateController.text = taskDetails['startDueDate'] ?? 'Select Start Date'; // "25-11-2024"
@@ -166,11 +174,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
         selectedApprovalRequired = taskCodeLists['approvalRequired'][taskDetails['approvalRequired'].toString()];
 
         taskCompletionTypeManual = taskCodeLists['taskCompletionType'][taskDetails['taskCompletionTypeManual'].toString()];
-        selectedTaskApprovalType = (taskDetails['approvalType'] == null || taskDetails['approvalType'].toString().isEmpty) ? '': taskDetails['approvalType'].toString();
-        selectedTaskCompletionAuto = (taskDetails['taskCompletionType'] == null || taskDetails['taskCompletionType'].toString().isEmpty) ? '' : taskDetails['taskCompletionType'].toString();
-        selectedLinkedTask = (taskDetails['linkedTask'] == null || taskDetails['linkedTask'].toString().isEmpty) ? '' : taskDetails['linkedTask'].toString();
-        TaskAssignee = taskDetails['assignee'];
-        TaskApprover = taskDetails['approver'].toString();
+        approvalRequiredYes = taskCodeLists['approvalRequired'][taskDetails['approvalRequiredYes'].toString()];
 
         checklist = List<ChecklistItem>.from(checklistData.map((item) => ChecklistItem.fromJson(item)));
 
@@ -298,30 +302,6 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
               };
             }
             break;
-          case 'taskCompletionType':
-            data = {
-              'fieldName': 'completionType',
-              'fieldValue': completionTypeValue
-            };
-            break;
-          case 'approvalType':
-            data = {
-              'fieldName': 'approvalType',
-              'fieldValue': selectedTaskApprovalType
-            };
-            break;
-          // case 'approver':
-          //   List<int> approver = _getCurrEditingValue('approver');
-          //   var approvalType = _taskInfo.approvalType;
-          //
-          //   data = {
-          //     'fieldName': 'approver',
-          //     'fieldValue': {
-          //       'approver':approver,
-          //       'approvalType':approvalType
-          //     }
-          //   };
-          //   break;
           case 'checkListGroup':
             String groupName = _getCurrEditingValue('checkListGroup');
 
@@ -367,12 +347,75 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
               };
             }
             break;
+          case 'attachFile':
+            String attachName = _getCurrEditingValue('attachFile') ?? '';;
+
+            print('case attachName : $attachName');
+
+            if(attachName.trim().isNotEmpty && attachName.trim().length > 0) {
+              //
+            } else {
+              attachName = path.basename(newAttachingFile!.path!);  // Ensure non-null and extract basename
+
+            }
+            data = {
+              'fieldName': 'attachFile',
+              'fieldValue': attachName
+            };
+
+            if (attachName.trim().isNotEmpty) {
+              data['attachName'] = attachName;
+            }
+
+            if(_editingAttachmentIndex! > -1) {
+              var _editingAttachment = _attachments[_editingAttachmentIndex!];
+              data['attachmentId'] = _editingAttachment.id;
+            }
+
+            break;
+
+          case 'attachLink':
+            String attachName = _getCurrEditingValue('attachLinkName') ?? '';
+            String attachLink = _getCurrEditingValue('attachLinkText') ?? '';
+
+            print('attachName: $attachName');
+            print('attachLink: $attachLink');
+
+            if (attachLink.trim().isNotEmpty) {
+              data = {
+                'fieldName': 'attachLink',
+                'fieldValue': attachLink,
+              };
+
+              if (attachName.trim().isNotEmpty) {
+                data['attachName'] = attachName;
+              }
+            }
+            break;
         }
         if (data != null && data.isNotEmpty) {
           bool isSaved = false;
           dynamic response;
 
-          response = await _panelService.updateTaskInfo(appUrl!, companyId!, caseId!, panelId!, taskId!, data);
+          if(currentEditingField == 'attachFile') {
+            File attachFile = File(newAttachingFile!.path!);
+            print("attachFile : $attachFile");
+
+            Map<String, File> files = {
+              'attachFile': attachFile
+            };
+
+            print('image File path: ${files['attachFile']?.path}');
+
+            final response = await panelService().attachFileToTask(
+              appUrl!,companyId!,caseId!,panelId!,taskId!,data,files,
+            );
+
+            isSaved = response['success'];
+          } else{
+
+            response = await _panelService.updateTaskInfo(appUrl!, companyId!, caseId!, panelId!, taskId!, data);
+          }
           // isSaved = response['success'];
           print('response: $response');
 
@@ -514,8 +557,70 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
   }
 
   // Dialog to change task name
-  void _showChangeTaskNameDialog() {
+  // Future<void> _showChangeTaskNameDialog() async {
+  //   _disposeNewCheckListFields();
+  //   // newAttachingFile = await FilePicker.getFile();
+  //   FilePickerResult? newAttachingFile = await FilePicker.platform.pickFiles();
+  //
+  //   TextEditingController _taskNameController = TextEditingController()
+  //     ..text = path.basename(newAttachingFile.path!);  // Using the alias `path`
+  //
+  //   showDialog(
+  //     context: context,
+  //     builder: (context) {
+  //       return AlertDialog(
+  //         title: Text('Change Task Name'),
+  //         content: TextField(
+  //           controller: _taskNameController,
+  //           decoration: InputDecoration(hintText: 'Enter new task name'),
+  //         ),
+  //         actions: <Widget>[
+  //           TextButton(
+  //             child: Text('Change'),
+  //             onPressed: () {
+  //               Navigator.of(context).pop();
+  //               String _newTaskName = _taskNameController.text;
+  //               if (_newTaskName.isNotEmpty && _newTaskName.length > 0) {
+  //                 currentEditingField = 'taskName';
+  //                 _putCurrEditingValue('taskName', _newTaskName);
+  //                 _onBtnSaveTaskInfoClicked();
+  //               }
+  //             },
+  //           ),
+  //           TextButton(
+  //             child: Text('Cancel'),
+  //             onPressed: () {
+  //               // Handle saving task name
+  //               setState(() {
+  //                 // Update task name in the task object or other handling logic
+  //                 widget.task['task'] = _taskNameController.text;
+  //               });
+  //               Navigator.of(context).pop();
+  //             },
+  //           ),
+  //         ],
+  //       );
+  //     },
+  //   );
+  // }
+
+
+  Future<void> _showChangeTaskNameDialog() async {
     _disposeNewCheckListFields();
+
+    // Corrected File Picker method
+    FilePickerResult? result = await FilePicker.platform.pickFiles();
+    if (result != null && result.files.isNotEmpty) {
+      // Access the file and its path properly
+      PlatformFile newAttachingFile = result.files.first;  // Use the first file from the result
+
+      // Ensure the file path is not null
+      TextEditingController _taskNameController = TextEditingController()
+        ..text = path.basename(newAttachingFile.path!); // Using the path alias
+    } else {
+      // Handle file pick cancellation if necessary
+      return;
+    }
 
     showDialog(
       context: context,
@@ -592,7 +697,77 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     );
   }
 
-// Method to show the file picker and then display the file name and icon
+  void _showFileDetails(String fileName, String filePath) {
+
+    TextEditingController groupFileNameController = TextEditingController();
+
+    _selectedFile = {
+      'fileName': fileName,
+      'filePath': filePath,
+      'date': DateFormat('dd-MM-yyyy').format(DateTime.now()),
+      'time': DateFormat('HH:mm').format(DateTime.now()),
+    };
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Selected File'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: TextEditingController(text: fileName), // Initializes with file name
+                readOnly: true,
+                decoration: InputDecoration(
+                  labelText: 'File Name',
+                  labelStyle: TextStyle(color: Colors.blue),
+                  hintText: 'File Name',
+                  hintStyle: TextStyle(color: Colors.black54),
+                  border: UnderlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Attach'),
+              onPressed: () {
+                // Prevent duplicate attachments
+                if (!_attachments.any((file) =>
+                file['fileName'] == _selectedFile!['fileName'] &&
+                    file['filePath'] == _selectedFile!['filePath'])) {
+                  setState(() {
+                    // Add file to the attachment list
+                    _attachments.add({
+                      'type': 'file',
+                      ..._selectedFile!,
+                    });
+                  });
+                }
+                _selectedFile = null; // Clear the temporary file
+                Navigator.of(context).pop();
+                String _attachName = groupFileNameController.text;
+                print("_attachName : $_attachName");
+
+                currentEditingField = 'attachFile';
+                _putCurrEditingValue('attachFile', _attachName);
+                _onBtnSaveTaskInfoClicked();
+              },
+            ),
+            TextButton(
+              child: Text('Close'),
+              onPressed: () {
+                _selectedFile = null; // Clear the temporary file
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _showAttachFileDialog() async {
     // Open the file picker
     FilePickerResult? result = await FilePicker.platform.pickFiles();
@@ -603,12 +778,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
       String fileName = result.files.single.name;
       String filePath = result.files.single.path ?? 'Unknown Path';
 
-      setState(() {
-        _fileName = fileName;
-        _filePath = filePath;
-      });
-
-      // Show a dialog with the selected file details
+      // Show file details dialog
       _showFileDetails(fileName, filePath);
     } else {
       // No file selected
@@ -618,54 +788,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     }
   }
 
-  // Method to show selected file details in a dialog
-  void _showFileDetails(String fileName, String filePath) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('Selected File'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Text('File Name: $fileName'),
-              TextField(
-                controller: TextEditingController(text: fileName), // Initializes the TextField with the file name
-                readOnly: true, // Makes the TextField read-only so users can't edit it
-                decoration: InputDecoration(
-                  labelText: 'File Name',
-                  labelStyle: TextStyle(color: Colors.blue), // Optional: color for the label
-                  hintText: 'File Name',
-                  hintStyle: TextStyle(color: Colors.black54),
-                  border: UnderlineInputBorder(), // Adds the underline
-                ),
-              )
-            ],
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: Text('Attach'),
-              onPressed: () {
-                setState(() {
-                  // Add file to attachment list
-                  _attachments.add(fileName);
-                });
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              child: Text('Close'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
 
-  // Dialog to attach link
   void _showAttachLinkDialog() {
     TextEditingController groupNameController = TextEditingController();
     TextEditingController groupLinkController = TextEditingController();
@@ -674,18 +797,24 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text('Attach Link',style: TextStyle(fontSize: 25),),
+          title: Text('Attach Link', style: TextStyle(fontSize: 25)),
           content: Column(
             mainAxisSize: MainAxisSize.min, // Ensure the dialog doesn't expand unnecessarily
             children: [
               TextField(
                 controller: groupNameController, // Controller for the first TextField
-                decoration: InputDecoration(hintText: 'Name'),
+                decoration: InputDecoration(
+                  hintText: 'Name',
+                  // errorText: groupNameController.text.isEmpty ? 'Name is required' : null,
+                ),
               ),
               SizedBox(height: 10), // Add some space between the fields
               TextField(
                 controller: groupLinkController, // Controller for the second TextField
-                decoration: InputDecoration(hintText: 'Link'),
+                decoration: InputDecoration(
+                  hintText: 'Link',
+                  // errorText: groupLinkController.text.isEmpty ? 'Link is required' : null,
+                ),
               ),
             ],
           ),
@@ -693,8 +822,29 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
             TextButton(
               child: Text('Attach'),
               onPressed: () {
-                // Attach link logic here
-                Navigator.of(context).pop();
+                if (groupNameController.text.isNotEmpty &&
+                    groupLinkController.text.isNotEmpty) {
+                  // If both fields are filled, add the link and close the dialog
+                  setState(() {
+                    _attachments.add({
+                      'type': 'link',
+                      'name': groupNameController.text,
+                      'url': groupLinkController.text,
+                    });
+                  });
+                  Navigator.of(context).pop();
+
+                  currentEditingField = 'attachLink';
+                  _putCurrEditingValue('attachLinkName',groupNameController.text);
+                  _putCurrEditingValue('attachLinkText',groupLinkController.text);
+
+                  _onBtnSaveTaskInfoClicked();
+                } else {
+                  // If fields are empty, show an error message via SnackBar
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Please fill in both fields')),
+                  );
+                }
               },
             ),
             TextButton(
@@ -708,6 +858,64 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
       },
     );
   }
+
+  // _DeleteAttachFile dialog
+  Future<void> _DeleteAttachFile(BuildContext context, String attachId) async {
+    print("attachId : $attachId");
+    await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text(
+            'Delete Attachment',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          content: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              const Icon(Icons.warning, color: Colors.amber),
+              const SizedBox(width: 10),
+              Expanded(
+                child: const Text(
+                  'Are you sure you want to delete the attachment?',
+                  style: TextStyle(fontSize: 16),
+                ),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                // Close the dialog without any action
+                Navigator.of(context).pop();
+              },
+              child: const Text('No'),
+            ),
+            TextButton(
+              onPressed: () {
+                // Perform delete action
+                setState(() {
+                  currentEditingField = 'deleteAttachment';
+                  _putCurrEditingValue('deleteAttachment', attachId);
+                });
+
+                // Close the dialog
+                Navigator.of(context).pop();
+
+                // Trigger save task info
+                _onBtnSaveTaskInfoClicked();
+              },
+              child: const Text(
+                'Yes',
+                style: TextStyle(color: Colors.red),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
 
   // Dialog to close task
   void _showCloseTaskDialog() {
@@ -1262,55 +1470,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     );
   }
 
-  Widget buildFileAtteachment() {
-    return ListView.builder(
-      shrinkWrap: true,
-      itemCount: _attachments.length,
-      itemBuilder: (context, index) {
-        final attachment = _attachments[index];  // Assuming this is a Map
-
-        return Card(
-          margin: EdgeInsets.symmetric(vertical: 8),
-          child: ListTile(
-            leading: Icon(Icons.file_copy),  // File icon
-            title: Text(attachment),  // Display file name
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: Icon(Icons.download),
-                  onPressed: () {
-                    // Implement your download action here
-                  },
-                ),
-                IconButton(
-                  icon: Icon(Icons.history),
-                  onPressed: () {
-                    // Implement your history action here
-                  },
-                ),
-                IconButton(
-                  icon: Icon(Icons.edit),
-                  onPressed: () {
-                    // Implement your edit action here
-                  },
-                ),
-                IconButton(
-                  icon: Icon(Icons.delete),
-                  onPressed: () {
-                    setState(() {
-                      _attachments.removeAt(index);
-                    });
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
+  // Function to buildTaskCompletionSection
   Widget buildTaskCompletionSection() {
     if (taskCodelists == null) {
       return Center(child: CircularProgressIndicator());
@@ -1318,17 +1478,16 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
 
     Map<String, String> taskCompletionType = taskCodelists!['taskCompletionType'].cast<String, String>();
     Map<String, String> taskApprovalRequired = taskCodelists!['approvalRequired'].cast<String, String>();
-    Map<String, String> taskCompletionAuto = taskCodelists!['taskCompletionAuto'].cast<String, String>();
-    Map<String, String> linkedTasks = taskCodelists!['linkedTasks'].cast<String, String>();
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Row for Completion Type and Approval Required
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Left Side - Completion Type with radio buttons
               Expanded(
                 flex: 1,
                 child: Column(
@@ -1358,8 +1517,6 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                               onChanged: (int? newValue) {
                                 setState(() {
                                   completionTypeValue = newValue;
-                                  currentEditingField = 'taskCompletionType';
-                                  _onBtnSaveTaskInfoClicked();
                                 });
                               },
                             ),
@@ -1373,46 +1530,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
               ),
               SizedBox(width: 20),
 
-              if (completionTypeValue == 2)
-              Expanded(
-                flex: 1,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Complete Task Automatically At',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    SizedBox(height: 8),
-                    DropdownButton<String>(
-                      value: selectedTaskCompletionAuto,
-                      items: taskCompletionAuto.entries.map((entry) {
-                        String value = entry.key;
-                        String label = entry.value;
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(label),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          selectedTaskCompletionAuto = newValue;
-                        });
-                      },
-                      hint: Text('--Select--'),
-                    ),
-                  ],
-                ),
-              ),
-              if (completionTypeValue == 2)
-              SizedBox(width: 20),
-            ],
-          ),
-          SizedBox(height: 20),
-
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+              // Right Side - Approval Required with radio buttons
               Expanded(
                 flex: 1,
                 child: Column(
@@ -1426,19 +1544,21 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: taskApprovalRequired.entries.map((entry) {
-                        String value = entry.key;
+                        int value = int.parse(entry.key);
                         String label = entry.value;
-
+                        approvalRequiredValue = int.parse(
+                            taskApprovalRequired.entries
+                                .firstWhere((entry) => entry.value == (selectedApprovalRequired != null ? selectedApprovalRequired : approvalRequiredYes))
+                                .key
+                        );
                         return Row(
                           children: [
-                            Radio<String>(
+                            Radio<int>(
                               value: value,
-                              groupValue: selectedTaskApprovalType,
-                              onChanged: (String? newValue) {
+                              groupValue: approvalRequiredValue,
+                              onChanged: (int? newValue) {
                                 setState(() {
-                                  selectedTaskApprovalType = newValue != null ? newValue.toString() : null;
-                                  currentEditingField = 'approvalType';
-                                  _onBtnSaveTaskInfoClicked();
+                                  approvalRequiredValue = newValue;
                                 });
                               },
                             ),
@@ -1450,166 +1570,111 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                   ],
                 ),
               ),
+            ],
+          ),
 
-              /*Expanded(
-                flex: 1,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(height: 8),
-                    if (TaskAssignee != null)
-                      DropdownButton<int>(
-                        value: TaskAssignee,
-                        items: members.map<DropdownMenuItem<int>>((member) {
-                          return DropdownMenuItem<int>(
-                            value: member['id'] as int,
-                            child: Text(member['name'] ?? 'Unknown'),
-                          );
-                        }).toList(),
-                        onChanged: (int? newValue) {
-                          setState(() {
-                            TaskAssignee = newValue;
-                          });
-                        },
-                      ),
-                  ],
-                ),
-              ),*/
+          SizedBox(height: 20),
 
-              if (selectedTaskApprovalType != null && selectedTaskApprovalType == '1')
+          // Row for Auto Start Task and Name Dropdowns
+          Row(
+            children: [
+              // Left side - Auto Start Task Dropdown
               Expanded(
                 flex: 1,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Approver',
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                    SizedBox(height: 8),
+                    DropdownButton<String>(
+                      value: autoStartTaskValue,
+                      items: <String>['Option 1', 'Option 2', 'Option 3']
+                          .map((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value),
+                        );
+                      }).toList(),
+                      onChanged: (String? newValue) {
+                        setState(() {
+                          autoStartTaskValue = newValue;
+                        });
+                      },
+                      hint: Text('Auto Start Task'),
                     ),
-                    SizedBox(height: 0),
-                    if (members.isNotEmpty)
-                      DropdownButton<String>(
-                        value: members.any((member) => member['id'].toString() == TaskApprover)
-                            ? TaskApprover
-                            : null,
-                        items: members.map<DropdownMenuItem<String>>((member) {
-                          return DropdownMenuItem<String>(
-                            value: member['id']?.toString(),
-                            child: Text(member['name'] ?? 'Unknown'),
-                          );
-                        }).toList(),
-                        onChanged: (String? newValue) {
-                          setState(() {
-                            TaskApprover = newValue;
-                          });
-                        },
-                        hint: Text('Select a Member'),
-                        isExpanded: true,
-                      )
-                    else
-                      Text('No approvers available'),
+                  ],
+                ),
+              ),
+              SizedBox(width: 20),
+
+              // Right side - Name Dropdown
+              Expanded(
+                flex: 1,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(height: 8),
+                    DropdownButton<String>(
+                      value: nameValue,
+                      items: <String>['John', 'Doe', 'Jane']
+                          .map((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value),
+                        );
+                      }).toList(),
+                      onChanged: (String? newValue) {
+                        setState(() {
+                          nameValue = newValue;
+                        });
+                      },
+                      hint: Text('Select Name'),
+                    ),
+                  ],
+                ),
+              ),
+
+
+            ],
+          ),
+          SizedBox(height: 20),
+          // Row for Auto Start Task and Name Dropdowns
+          Row(
+            children: [
+              Expanded(child: Column()),
+              // Right side - Name 2 Dropdown
+              Expanded(
+                flex: 1,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(height: 8),
+                    DropdownButton<String>(
+                      value: name2Value,
+                      items: <String>['John', 'Doe', 'Jane']
+                          .map((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value),
+                        );
+                      }).toList(),
+                      onChanged: (String? newValue) {
+                        setState(() {
+                          name2Value = newValue;
+                        });
+                      },
+                      hint: Text('Select Name 2'),
+                    ),
                   ],
                 ),
               ),
             ],
           ),
-          SizedBox(height: 20),
-
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (selectedTaskApprovalType != null && selectedTaskApprovalType == '1')
-                Expanded(
-                  flex: 1,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Linked Task',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 0),
-                      if (linkedTasks.isNotEmpty)
-                        DropdownButton<String>(
-                          value: linkedTasks.containsKey(selectedLinkedTask) ? selectedLinkedTask : null,
-                          items: linkedTasks.entries.map((entry) {
-                            String value = entry.key;
-                            String label = entry.value;
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(label),
-                            );
-                          }).toList(),
-                          onChanged: (String? newValue) {
-                            setState(() {
-                              selectedLinkedTask = newValue;
-                            });
-                          },
-                          hint: Text('--Select a Task--'),
-                          isExpanded: true,
-                        ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-          SizedBox(height: 20),
-
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (selectedTaskApprovalType != null && selectedTaskApprovalType == '1')
-                Expanded(
-                  flex: 1,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'On Completion of task, Automatically Start',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 0),
-                      if (members.isNotEmpty)
-                        DropdownButton<String>(
-                          value: members.any((member) => member['id'].toString() == TaskApprover)
-                              ? TaskApprover
-                              : null,
-                          items: members.map<DropdownMenuItem<String>>((member) {
-                            return DropdownMenuItem<String>(
-                              value: member['id']?.toString(),
-                              child: Text(member['name'] ?? 'Unknown'),
-                            );
-                          }).toList(),
-                          onChanged: (String? newValue) {
-                            setState(() {
-                              TaskApprover = newValue;
-                            });
-                          },
-                          hint: Text('Select a Member'),
-                          isExpanded: true,
-                        )
-                      else
-                        Text('No approvers available'),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-          SizedBox(height: 20),
-
-          /*Row(
-            children: [
-              Expanded(child: Column()),
-              // Right side - Name 2 Dropdown
-
-
-            ],
-          ),*/
         ],
       ),
     );
   }
 
+  // Function to build Activity Section
   Widget buildActivitySection() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -1619,25 +1684,28 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
             padding: const EdgeInsets.symmetric(vertical: 10.0),
             child: Row(
               children: [
+                // Message Icon on the left
                 IconButton(
                   icon: Icon(Icons.message, color: Colors.blue), onPressed: () {  },
                 ),
 
+                // TextField with placeholder text
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
                     child: TextField(
                       controller: _messageController,
                       decoration: InputDecoration(
-                        hintText: "Enter the comment",
+                        hintText: "Enter the comment", // Placeholder text
                         contentPadding: EdgeInsets.symmetric(vertical: 10.0, horizontal: 16.0),
                         border: UnderlineInputBorder(
-                          borderSide: BorderSide(color: Colors.blue),
+                          borderSide: BorderSide(color: Colors.blue), // Underline style
                         ),
                         suffixIcon: IconButton(
-                          icon: Icon(Icons.send, color: Colors.blue),
+                          icon: Icon(Icons.send, color: Colors.blue),  // Send icon
                           onPressed: () {
-                            _messageController.clear();
+                            // Action for send button, could be to send the message
+                            _messageController.clear(); // Clear the text after sending
                           },
                         ),
                       ),
@@ -1784,12 +1852,12 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
 
                                 final groupId = checklist
                                     .firstWhere((item) => item.groupName == groupName, orElse: () => ChecklistItem(
-                                        isChecked: false,
-                                        text: '',
-                                        groupName: groupName,
-                                        groupId: 'Unknown', // Default fallback groupId
-                                        id: '',
-                                      ),)
+                                  isChecked: false,
+                                  text: '',
+                                  groupName: groupName,
+                                  groupId: 'Unknown', // Default fallback groupId
+                                  id: '',
+                                ),)
                                     .groupId;
 
                                 final newItem = ChecklistItem(
@@ -1899,99 +1967,125 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
 
 
 
-
-  // buildFileAttachment function in listview
   Widget buildFileAttachment() {
-    String currentDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
-    String currentTime = DateFormat('HH:mm:ss').format(DateTime.now());
+    // Use MediaQuery to get the screen size
+    double screenWidth = MediaQuery.of(context).size.width;
+    double screenHeight = MediaQuery.of(context).size.height;
+    double iconSize = screenWidth * 0.07; // Adjust icon size based on screen width
+    double spacing = screenWidth * 0.02; // Adjust spacing based on screen width
 
     return ListView.builder(
       shrinkWrap: true,
       itemCount: _attachments.length,
       itemBuilder: (context, index) {
-        final attachment = _attachments[index]; // Assuming this is a Map or String
-        print("attachment: $attachment");
+        final attachment = _attachments[index];
 
-        // Use MediaQuery to get the screen size
-        double screenWidth = MediaQuery.of(context).size.width;
-        double screenHeight = MediaQuery.of(context).size.height;
-        double iconSize = screenWidth * 0.07; // Adjust icon size based on screen width
-        double spacing = screenWidth * 0.02; // Adjust spacing based on screen width
-
-        return Card(
-          margin: EdgeInsets.symmetric(vertical: 10),
-          child: ListTile(
-            leading: Icon(Icons.file_copy, size: iconSize),
-            title: Text(
-              attachment,
-              style: TextStyle(fontSize: screenWidth * 0.03,fontWeight: FontWeight.bold), // Adjust font size dynamically
-            ),
-            subtitle: Row(
-              children: [
-                SizedBox(height: spacing * 5), // Space between date and time
-                Icon(Icons.calendar_today, size: iconSize * 0.7, color: Colors.grey),
-                SizedBox(width: spacing),
-                Text(
-                  currentDate,
-                  style: TextStyle(fontSize: screenWidth * 0.03),
-                ),
-                SizedBox(width: spacing * 2), // Space between date and time
-                Icon(Icons.access_time, size: iconSize * 0.7, color: Colors.grey), // Time Icon
-                SizedBox(width: spacing),
-                Text(
-                  currentTime,
-                  style: TextStyle(fontSize: screenWidth * 0.03),
-                ),
-              ],
-            ),
-            trailing: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: screenWidth * 0.4), // Dynamic trailing width
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+        if (attachment['type'] == 'file') {
+          // For file attachments
+          return Card(
+            color: Colors.white,
+            elevation: 6.0,
+            margin: EdgeInsets.symmetric(vertical: 10),
+            child: ListTile(
+              leading: Icon(Icons.file_copy, size: 30),
+              title: Text(
+                attachment['fileName'],  // Display file name
+                style: TextStyle(fontSize: screenWidth * 0.03, fontWeight: FontWeight.bold),  // Adjust font size dynamically
+              ),
+              subtitle: Row(
                 children: [
-                  Flexible(
-                    child: FittedBox(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          GestureDetector(
-                            onTap: () => print("Download clicked"),
-                            child: Icon(Icons.download, size: iconSize * 0.8),
-                          ),
-                          SizedBox(width: spacing),
-                          GestureDetector(
-                            onTap: () => print("History clicked"),
-                            child: Icon(Icons.history, size: iconSize * 0.8),
-                          ),
-                        ],
-                      ),
-                    ),
+                  SizedBox(height: spacing * 5),  // Space between date and time
+                  Icon(Icons.calendar_today, size: iconSize * 0.7, color: Colors.grey),
+                  SizedBox(width: spacing),
+                  Text(
+                    attachment['date'],
+                    style: TextStyle(fontSize: screenWidth * 0.03),
                   ),
-
-                  SizedBox(height: screenHeight * 0.01), // Adjust space between rows dynamically
-                  Flexible(
-                    child: FittedBox(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          GestureDetector(
-                            onTap: () => print("Edit clicked"),
-                            child: Icon(Icons.edit, size: iconSize * 0.8,color: Colors.blueAccent,),
-                          ),
-                          SizedBox(width: spacing),
-                          GestureDetector(
-                            onTap: () => print("Delete clicked"),
-                            child: Icon(Icons.delete, size: iconSize * 0.8,color: Colors.red,),
-                          ),
-                        ],
-                      ),
-                    ),
+                  SizedBox(width: spacing * 2),  // Space between date and time
+                  Icon(Icons.access_time, size: iconSize * 0.7, color: Colors.grey),  // Time Icon
+                  SizedBox(width: spacing),
+                  Text(
+                    attachment['time'],  // Display time
+                    style: TextStyle(fontSize: screenWidth * 0.03),
                   ),
                 ],
               ),
+              trailing: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: screenWidth * 0.4),  // Dynamic trailing width
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Flexible(
+                      child: FittedBox(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            GestureDetector(
+                              onTap: () => print("Download clicked"),
+                              child: Icon(Icons.download, size: iconSize * 0.8),
+                            ),
+                            SizedBox(width: spacing),
+                            GestureDetector(
+                              onTap: () => print("History clicked"),
+                              child: Icon(Icons.history, size: iconSize * 0.8),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: screenHeight * 0.01),  // Adjust space between rows dynamically
+                    Flexible(
+                      child: FittedBox(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            GestureDetector(
+                              onTap: () => print("Edit clicked"),
+                              child: Icon(Icons.edit, size: iconSize * 0.8, color: Colors.blueAccent),
+                            ),
+                            SizedBox(width: spacing),
+                            GestureDetector(
+                              onTap: () => _DeleteAttachFile,
+                              child: Icon(Icons.delete, size: iconSize * 0.8, color: Colors.red),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-        );
+          );
+        } else if (attachment['type'] == 'link') {
+          // For link attachments
+          return Card(
+            color: Colors.white,
+            elevation: 6.0,
+            margin: EdgeInsets.symmetric(vertical: 10),
+            child: ListTile(
+              leading: Icon(Icons.link, size: 30),
+              title: Text(
+                attachment['name'],
+                style: TextStyle(fontSize: screenWidth * 0.03, fontWeight: FontWeight.bold),  // Adjust font size dynamically
+              ),
+              subtitle: Text(attachment['url']),
+              trailing: IconButton(
+                icon: Icon(Icons.open_in_browser),
+                onPressed: () {
+                  String url = attachment['url'] ?? '';
+                  if (url.isNotEmpty) {
+                    print('url $url');
+                  }
+                  // Implement opening link logic if needed
+                  print("Opening link: ${attachment['url']}");
+                },
+              ),
+            ),
+          );
+        } else {
+          return Container(); // For unsupported types
+        }
       },
     );
   }
