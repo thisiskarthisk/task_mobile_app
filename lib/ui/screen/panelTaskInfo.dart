@@ -1,14 +1,20 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_tms/ui/screen/panel.dart';
 import 'package:flutter_tms/ui/widgets/custom_expansion_tile.dart' as customExpansionTile;
 import 'package:intl/intl.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../screen/panelService.dart';
-// import 'package:url_launcher/url_launcher.dart';
 import 'package:path/path.dart' as path;  // For path manipulation, use an alias to avoid conflicts
+import 'package:path_provider/path_provider.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import '../../api/authService.dart';
+import 'package:http/http.dart' as http;
+import 'package:dio/dio.dart';
 
 
 class PanelDetailsScreen extends StatefulWidget {
@@ -18,6 +24,7 @@ class PanelDetailsScreen extends StatefulWidget {
   @override
   _PanelDetailsScreenState createState() => _PanelDetailsScreenState();
 }
+
 
 // Define the ChecklistItem model
 class ChecklistItem {
@@ -48,9 +55,13 @@ class ChecklistItem {
   }
 }
 
+
+
 class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
+
   final panelService _panelService = panelService();
   final PanelScreen _panelScreen = PanelScreen(task: {},);
+  final AuthService _authService = AuthService();
 
   final TextEditingController _messageController = TextEditingController();
   final TextEditingController _taskNameController = TextEditingController();
@@ -84,9 +95,11 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
   List<dynamic> _attachments = [];
   Map<String, String>? _selectedFile;
   Timer? _keyboardTimer;
-  // late File newAttachingFile;
+  File? newAttachFile;
+  String? newAttachingFilePath;
   PlatformFile? newAttachingFile;  // Declare as nullable to safely check if it's initialized
-
+  Map<String, bool> historyVisibility = {};
+  bool refreshLayout = false;
 
 
   @override
@@ -347,33 +360,59 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
               };
             }
             break;
+          // case 'attachFile':
+          //   String attachName = _getCurrEditingValue('attachFile') ?? '';;
+          //
+          //   print('case attachName : $attachName');
+          //
+          //   if(attachName.trim().isNotEmpty && attachName.trim().length > 0) {
+          //     //
+          //   } else {
+          //     attachName = path.basename(newAttachingFile!.path!);  // Ensure non-null and extract basename
+          //
+          //   }
+          //   data = {
+          //     'fieldName': 'attachFile',
+          //     'fieldValue': attachName
+          //   };
+          //
+          //   if (attachName.trim().isNotEmpty) {
+          //     data['attachName'] = attachName;
+          //   }
+          //
+          //   if(_editingAttachmentIndex! > -1) {
+          //     var _editingAttachment = _attachments[_editingAttachmentIndex!];
+          //     data['attachmentId'] = _editingAttachment.id;
+          //   }
+          //   break;
           case 'attachFile':
-            String attachName = _getCurrEditingValue('attachFile') ?? '';;
+            String attachName = _getCurrEditingValue('attachFile');
 
-            print('case attachName : $attachName');
-
-            if(attachName.trim().isNotEmpty && attachName.trim().length > 0) {
+            if(attachName.trim().length > 0) {
               //
             } else {
-              attachName = path.basename(newAttachingFile!.path!);  // Ensure non-null and extract basename
-
+              // attachName = path.basename(newAttachingFile!.path!);  // Ensure non-null and extract basename
+              attachName = path.basename(newAttachingFilePath!);
             }
+
             data = {
               'fieldName': 'attachFile',
               'fieldValue': attachName
             };
 
-            if (attachName.trim().isNotEmpty) {
-              data['attachName'] = attachName;
-            }
-
             if(_editingAttachmentIndex! > -1) {
               var _editingAttachment = _attachments[_editingAttachmentIndex!];
               data['attachmentId'] = _editingAttachment.id;
             }
-
             break;
+          case 'deleteAttachment':
+            String attachmentId = _getCurrEditingValue('deleteAttachment');
 
+            data = {
+              'fieldName': 'deleteAttachment',
+              'fieldValue': attachmentId
+            };
+            break;
           case 'attachLink':
             String attachName = _getCurrEditingValue('attachLinkName') ?? '';
             String attachLink = _getCurrEditingValue('attachLinkText') ?? '';
@@ -398,29 +437,37 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
           dynamic response;
 
           if(currentEditingField == 'attachFile') {
-            File attachFile = File(newAttachingFile!.path!);
+            print("newAttachingFile : $newAttachingFile");
+
+            File attachFile = File(newAttachingFilePath!);
             print("attachFile : $attachFile");
 
             Map<String, File> files = {
               'attachFile': attachFile
             };
 
-            print('image File path: ${files['attachFile']?.path}');
+            print('files: $files');
 
             final response = await panelService().attachFileToTask(
               appUrl!,companyId!,caseId!,panelId!,taskId!,data,files,
             );
 
-            isSaved = response['success'];
-          } else{
+            if (response is Map<String, dynamic>) {
+              isSaved = response['success'] ?? false; // Safely access the 'success' key
+            }
+
+          } else {
 
             response = await _panelService.updateTaskInfo(appUrl!, companyId!, caseId!, panelId!, taskId!, data);
-          }
-          // isSaved = response['success'];
-          print('response: $response');
 
-          if (response is Map<String, dynamic> && response['success'] == true) {
+            if (response is Map<String, dynamic>) {
+              isSaved = response['success'] ?? false; // Safely access the 'success' key
+            }
+          }
+
+          if (isSaved) {
             await _fetchCasePanelTaskInfo(appUrl, companyId, caseId, panelId, taskId);
+            print("Task info updated successfully.");
           }
         }
       }
@@ -504,7 +551,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
             children: [
               Icon(Icons.attach_file,color: Colors.black),
               SizedBox(width: 8),
-              Text("Attach File")
+              Text("Attach File"),
             ],
           ),
         ),
@@ -555,54 +602,6 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
       }
     }
   }
-
-  // Dialog to change task name
-  // Future<void> _showChangeTaskNameDialog() async {
-  //   _disposeNewCheckListFields();
-  //   // newAttachingFile = await FilePicker.getFile();
-  //   FilePickerResult? newAttachingFile = await FilePicker.platform.pickFiles();
-  //
-  //   TextEditingController _taskNameController = TextEditingController()
-  //     ..text = path.basename(newAttachingFile.path!);  // Using the alias `path`
-  //
-  //   showDialog(
-  //     context: context,
-  //     builder: (context) {
-  //       return AlertDialog(
-  //         title: Text('Change Task Name'),
-  //         content: TextField(
-  //           controller: _taskNameController,
-  //           decoration: InputDecoration(hintText: 'Enter new task name'),
-  //         ),
-  //         actions: <Widget>[
-  //           TextButton(
-  //             child: Text('Change'),
-  //             onPressed: () {
-  //               Navigator.of(context).pop();
-  //               String _newTaskName = _taskNameController.text;
-  //               if (_newTaskName.isNotEmpty && _newTaskName.length > 0) {
-  //                 currentEditingField = 'taskName';
-  //                 _putCurrEditingValue('taskName', _newTaskName);
-  //                 _onBtnSaveTaskInfoClicked();
-  //               }
-  //             },
-  //           ),
-  //           TextButton(
-  //             child: Text('Cancel'),
-  //             onPressed: () {
-  //               // Handle saving task name
-  //               setState(() {
-  //                 // Update task name in the task object or other handling logic
-  //                 widget.task['task'] = _taskNameController.text;
-  //               });
-  //               Navigator.of(context).pop();
-  //             },
-  //           ),
-  //         ],
-  //       );
-  //     },
-  //   );
-  // }
 
 
   Future<void> _showChangeTaskNameDialog() async {
@@ -697,15 +696,17 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     );
   }
 
+
   void _showFileDetails(String fileName, String filePath) {
+    // Create a temporary controller to display the file name (read-only)
+    TextEditingController groupFileNameController = TextEditingController(text: fileName);
 
-    TextEditingController groupFileNameController = TextEditingController();
-
+    // Store file details temporarily, check if _selectedFile is null before using it
     _selectedFile = {
       'fileName': fileName,
       'filePath': filePath,
-      'date': DateFormat('dd-MM-yyyy').format(DateTime.now()),
-      'time': DateFormat('HH:mm').format(DateTime.now()),
+      'date': DateFormat('dd-MM-yyyy').format(DateTime.now()), // Current date
+      'time': DateFormat('HH:mm').format(DateTime.now()),      // Current time
     };
 
     showDialog(
@@ -717,13 +718,11 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
-                controller: TextEditingController(text: fileName), // Initializes with file name
-                readOnly: true,
+                controller: groupFileNameController,
+                readOnly: true, // Make the field non-editable
                 decoration: InputDecoration(
                   labelText: 'File Name',
                   labelStyle: TextStyle(color: Colors.blue),
-                  hintText: 'File Name',
-                  hintStyle: TextStyle(color: Colors.black54),
                   border: UnderlineInputBorder(),
                 ),
               ),
@@ -732,33 +731,54 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
           actions: <Widget>[
             TextButton(
               child: Text('Attach'),
-              onPressed: () {
-                // Prevent duplicate attachments
-                if (!_attachments.any((file) =>
-                file['fileName'] == _selectedFile!['fileName'] &&
-                    file['filePath'] == _selectedFile!['filePath'])) {
-                  setState(() {
-                    // Add file to the attachment list
-                    _attachments.add({
-                      'type': 'file',
-                      ..._selectedFile!,
-                    });
-                  });
-                }
-                _selectedFile = null; // Clear the temporary file
-                Navigator.of(context).pop();
-                String _attachName = groupFileNameController.text;
-                print("_attachName : $_attachName");
+              onPressed: () async {
+                // Safely check if _selectedFile is not null before using it
+                if (_selectedFile != null) {
+                  // Check for duplicate attachments
+                  if (!_attachments.any((file) =>
+                  file['fileName'] == _selectedFile!['fileName'] &&
+                      file['filePath'] == _selectedFile!['filePath'])) {
+                    setState(() {
+                      // Add the file to attachments
+                      if (_selectedFile != null && _selectedFile!['fileName'] != null) {
+                        // newAttachingFile = _selectedFile;
+                        print('_selectedFile: ${_selectedFile!['filePath']}');
 
-                currentEditingField = 'attachFile';
-                _putCurrEditingValue('attachFile', _attachName);
-                _onBtnSaveTaskInfoClicked();
+                        newAttachingFilePath =_selectedFile!['filePath'];
+
+                        _attachments.add({
+                        'type': 'file',
+                        ..._selectedFile!, // Use the file details
+                      });
+                      } else {
+                        print("Error: _selectedFile or fileName is null");
+                      }
+                    });
+                  }
+
+                  // Clear temporary file data and close dialog
+                  _selectedFile = null;
+                  Navigator.of(context).pop();
+
+                  // Trigger saving task information
+                  String _attachName = groupFileNameController.text;
+                  print("_attachName attach: $_attachName");
+
+                  currentEditingField = 'attachFile';
+
+                  _putCurrEditingValue('attachFile', _attachName);
+                  _onBtnSaveTaskInfoClicked();
+                } else {
+                  // Handle the case where _selectedFile is null (e.g., show an error)
+                  print('Error: Selected file is null');
+                }
               },
             ),
             TextButton(
               child: Text('Close'),
               onPressed: () {
-                _selectedFile = null; // Clear the temporary file
+                // Clear temporary file data and close dialog
+                _selectedFile = null;
                 Navigator.of(context).pop();
               },
             ),
@@ -773,10 +793,10 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     FilePickerResult? result = await FilePicker.platform.pickFiles();
 
     // Check if the user selected a file
-    if (result != null) {
+    if (result != null && result.files.isNotEmpty) {
       // Get the file name and path
-      String fileName = result.files.single.name;
       String filePath = result.files.single.path ?? 'Unknown Path';
+      String fileName = path.basename(filePath); // Get the file name using 'basename'
 
       // Show file details dialog
       _showFileDetails(fileName, filePath);
@@ -787,7 +807,6 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
       );
     }
   }
-
 
   void _showAttachLinkDialog() {
     TextEditingController groupNameController = TextEditingController();
@@ -859,9 +878,9 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     );
   }
 
+
   // _DeleteAttachFile dialog
-  Future<void> _DeleteAttachFile(BuildContext context, String attachId) async {
-    print("attachId : $attachId");
+  Future<void> _showDeleteAttachmentModal(BuildContext context, String attachmentId) async {
     await showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -873,11 +892,11 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
           content: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              const Icon(Icons.warning, color: Colors.amber),
+              const Icon(Icons.delete, color: Colors.red),
               const SizedBox(width: 10),
               Expanded(
                 child: const Text(
-                  'Are you sure you want to delete the attachment?',
+                  'Are you sure you want to delete this attachment?',
                   style: TextStyle(fontSize: 16),
                 ),
               ),
@@ -896,14 +915,14 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                 // Perform delete action
                 setState(() {
                   currentEditingField = 'deleteAttachment';
-                  _putCurrEditingValue('deleteAttachment', attachId);
+                  _putCurrEditingValue('deleteAttachment', attachmentId); // You can call your delete function here
                 });
 
                 // Close the dialog
                 Navigator.of(context).pop();
 
-                // Trigger save task info
-                _onBtnSaveTaskInfoClicked();
+                // Trigger save task info or any other action after deletion
+                _onBtnSaveTaskInfoClicked(); // This could be a function to save task info after deletion
               },
               child: const Text(
                 'Yes',
@@ -915,6 +934,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
       },
     );
   }
+
 
 
   // Dialog to close task
@@ -1128,7 +1148,6 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     );
   }
 
-
   // Helper function to build each expandable section
   Widget buildExpandableSection({
     required String title,
@@ -1160,6 +1179,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
       ),
     );
   }
+
 
   // Function to create CircleAvatar with onTap that opens a modal showing the full name
   Widget buildMemberAvatar(String initial, String fullName,String role, Color backgroundColor, Color foregroundColor) {
@@ -1211,7 +1231,6 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
       ),
     );
   }
-
 
   // Calendar Info Section with Date and Time Pickers
   Widget buildCalendarInfoContent() {
@@ -1728,6 +1747,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     );
   }
 
+
   Future<void> _showDeleteCheckListItemModal(BuildContext context, String checklistItemId) async {
     await showDialog(
       context: context,
@@ -1782,7 +1802,6 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
       },
     );
   }
-
 
   // Build grouped checklist section
   Widget buildChecklistSection() {
@@ -1909,6 +1928,8 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     );
   }
 
+
+
   // Checklist Item Widget
   Widget buildChecklistItem(ChecklistItem item) {
     return item.text.isNotEmpty  // Check if the text field is not empty
@@ -1965,9 +1986,8 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
         : Container(); // If text is empty, do not display anything (return an empty container)
   }
 
-
-
   Widget buildFileAttachment() {
+    final idt = _authService.getIdt();
     // Use MediaQuery to get the screen size
     double screenWidth = MediaQuery.of(context).size.width;
     double screenHeight = MediaQuery.of(context).size.height;
@@ -1979,84 +1999,164 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
       itemCount: _attachments.length,
       itemBuilder: (context, index) {
         final attachment = _attachments[index];
-
+        print("attachment : $attachment");
+        print("attachment : $_attachments[index]");
         if (attachment['type'] == 'file') {
-          // For file attachments
           return Card(
             color: Colors.white,
             elevation: 6.0,
             margin: EdgeInsets.symmetric(vertical: 10),
-            child: ListTile(
-              leading: Icon(Icons.file_copy, size: 30),
-              title: Text(
-                attachment['fileName'],  // Display file name
-                style: TextStyle(fontSize: screenWidth * 0.03, fontWeight: FontWeight.bold),  // Adjust font size dynamically
-              ),
-              subtitle: Row(
-                children: [
-                  SizedBox(height: spacing * 5),  // Space between date and time
-                  Icon(Icons.calendar_today, size: iconSize * 0.7, color: Colors.grey),
-                  SizedBox(width: spacing),
-                  Text(
-                    attachment['date'],
-                    style: TextStyle(fontSize: screenWidth * 0.03),
+            child: Column(
+              children: [
+                ListTile(
+                  leading: Icon(Icons.file_copy, size: 30),
+                  title: Text(
+                    attachment['fileName'],  // Display file name
+                    style: TextStyle(fontSize: screenWidth * 0.03, fontWeight: FontWeight.bold),  // Adjust font size dynamically
                   ),
-                  SizedBox(width: spacing * 2),  // Space between date and time
-                  Icon(Icons.access_time, size: iconSize * 0.7, color: Colors.grey),  // Time Icon
-                  SizedBox(width: spacing),
-                  Text(
-                    attachment['time'],  // Display time
-                    style: TextStyle(fontSize: screenWidth * 0.03),
+                  subtitle: Row(
+                    children: [
+                      SizedBox(height: spacing * 5),  // Space between date and time
+                      Icon(Icons.calendar_today, size: iconSize * 0.7, color: Colors.grey),
+                      SizedBox(width: spacing),
+                      Text(
+                        attachment['date'],
+                        style: TextStyle(fontSize: screenWidth * 0.03),
+                      ),
+                      SizedBox(width: spacing * 2),  // Space between date and time
+                      Icon(Icons.access_time, size: iconSize * 0.7, color: Colors.grey),  // Time Icon
+                      SizedBox(width: spacing),
+                      Text(
+                        attachment['time'],  // Display time
+                        style: TextStyle(fontSize: screenWidth * 0.03),
+                      ),
+                    ],
+                  ),
+                  trailing: PopupMenuButton<String>(
+                    color: Colors.white,
+                    icon: Icon(Icons.more_vert, color: Colors.black87),
+                    onSelected: (value) async {
+                      switch (value) {
+                        case 'download':
+                          // final downloader = FileDownloader();
+                          // print('Starting file download...');
+                          // String url = attachment['url']!;
+                          // print("url:$url");
+                          // String fileName = attachment['fileName']!;
+                          // print("fileName:$fileName");
+                          // final String token = await _authService.getIdt() ?? "";
+                          // print("token:$token");
+                          // try {
+                          //   if (token.isEmpty) {
+                          //     print("Token is empty. Unable to proceed with download.");
+                          //     return;
+                          //   }
+                          //   // Download the file
+                          //   File file = await downloader.downloadFile(url, fileName, token);
+                          //   print('File saved to: ${file.path}');
+                          // } catch (e) {
+                          //   print("Download failed: $e");
+                          // }
+                          String url = attachment['url']!;
+                          print("url:$url");
+                          String fileName = attachment['fileName']!;
+                          print("fileName:$fileName");
+                          final String token = await _authService.getIdt() ?? "";
+                          downloadFile(url, fileName,token);
+                          break;
+                        case 'history':
+                          _toggleDocumentHistory(index);
+                          break;
+                        case 'edit':
+                          print("Edit clicked for ${attachment['id']}");
+                          break;
+                        case 'delete':
+                          String attachmentId = attachment['id'].toString();
+                          _showDeleteAttachmentModal(context, attachmentId);
+                          break;
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: 'download',
+                        child: _menuItemRow(Icons.download, iconColor:Colors.black, "Download"),
+                      ),
+                      PopupMenuItem(
+                        value: 'history',
+                        child: _menuItemRow(Icons.history,  iconColor:Colors.black,"History"),
+                      ),
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: _menuItemRow(Icons.edit,  iconColor:Colors.black,"Edit"),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: _menuItemRow(Icons.delete, iconColor:Colors.red, "Delete"),
+                      ),
+                    ],
+                  ),
+                ),
+                // Show the history design only if the history visibility is true for this card
+                if (historyVisibility[attachment['id'].toString()] ?? false) ...[
+                  Padding(
+                    padding: const EdgeInsets.all(10.0),
+                    child: Stack(
+                      children: [
+                        Container(
+                          margin: const EdgeInsets.symmetric(vertical: 8.0),
+                          padding: const EdgeInsets.only(top: 16.0, left: 12.0, right: 12.0, bottom: 12.0),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey, width: 1.5),
+                            borderRadius: BorderRadius.circular(12.0),
+                            color: Colors.white,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 10.0),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                child: Row(
+                                  children: [
+                                    // This can be a TextField or other widgets depending on your requirement
+                                    // I'm leaving it commented out for now
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Positioned(
+                          left: 20.0,
+                          top: -5.0,
+                          child: Container(
+                            color: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min, // To prevent it from occupying full width
+                              children: [
+                                Icon(Icons.history, size: iconSize * 0.7, color: Colors.grey),  // History Icon
+                                SizedBox(width: 8.0), // Space between the icon and the name
+                                Text(
+                                  'History', // The name or text you want to display
+                                  style: TextStyle(
+                                    fontSize: screenWidth * 0.03,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
-              ),
-              trailing: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: screenWidth * 0.4),  // Dynamic trailing width
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Flexible(
-                      child: FittedBox(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            GestureDetector(
-                              onTap: () => print("Download clicked"),
-                              child: Icon(Icons.download, size: iconSize * 0.8),
-                            ),
-                            SizedBox(width: spacing),
-                            GestureDetector(
-                              onTap: () => print("History clicked"),
-                              child: Icon(Icons.history, size: iconSize * 0.8),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: screenHeight * 0.01),  // Adjust space between rows dynamically
-                    Flexible(
-                      child: FittedBox(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            GestureDetector(
-                              onTap: () => print("Edit clicked"),
-                              child: Icon(Icons.edit, size: iconSize * 0.8, color: Colors.blueAccent),
-                            ),
-                            SizedBox(width: spacing),
-                            GestureDetector(
-                              onTap: () => _DeleteAttachFile,
-                              child: Icon(Icons.delete, size: iconSize * 0.8, color: Colors.red),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              ],
             ),
           );
+
         } else if (attachment['type'] == 'link') {
           // For link attachments
           return Card(
@@ -2088,5 +2188,271 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
         }
       },
     );
+  }
+
+  Widget _menuItemRow(IconData icon, String text, {Color iconColor = Colors.blueAccent}) {
+    return Row(
+      children: [
+        Icon(icon, color: iconColor), // Icon with customizable color
+        SizedBox(width: 10),
+        Text(
+          text,
+          style: TextStyle(color: Colors.black87), // Consistent text color
+        ),
+      ],
+    );
+  }
+
+
+  _toggleDocumentHistory(int _attachmentIndex) async {
+    try {
+      final attachment = _attachments[_attachmentIndex];
+      print(attachment);
+
+      final response = await panelService().fetchTaskAdditionalDetails(
+        appUrl!,                // appUrl as String
+        companyId!,             // companyId as int (do not convert it to String)
+        caseId.toString(),      // Ensure caseId is String
+        panelId.toString(),     // Convert panelId to String
+        taskId.toString(),      // Convert taskId to String
+        1,                      // Keep this as an int
+        'documentHistory',      // Pass String directly
+        'documentId=${attachment['id']}', // Access 'id' as a key
+      );
+      print("response${response.attachmentHistory}");
+
+      if (response.success) {
+        attachment.documentHistoryList = response.attachmentHistory;
+        attachment.isDocumentHistoryShown = true;
+        historyVisibility[attachment.id.toString()] = true;
+
+        refreshLayout = true;
+        setState(() {});
+      } else {
+        print("Failed to fetch document history: ${response.errorMessage}");
+      }
+    } catch (e, stackTrace) {
+      print('Error: ${e.toString()}');
+      print(stackTrace.toString());
+    }
+  }
+
+  // bool permissionGranted = false;
+  // Future<void> _getStoragePermission() async {
+  //   try {
+  //     DeviceInfoPlugin plugin = DeviceInfoPlugin();
+  //     AndroidDeviceInfo android = await plugin.androidInfo;
+  //
+  //     if (android.version.sdkInt < 33) {
+  //       // For Android 12 and below: Request STORAGE permission
+  //       if (await Permission.storage.request().isGranted) {
+  //         setState(() {
+  //           permissionGranted = true;
+  //         });
+  //       } else if (await Permission.storage.isPermanentlyDenied) {
+  //         await openAppSettings(); // Direct user to settings if permission is permanently denied
+  //       } else {
+  //         setState(() {
+  //           permissionGranted = false;
+  //         });
+  //       }
+  //     } else {
+  //       // For Android 13 and above: Request PHOTOS permission
+  //       if (await Permission.photos.request().isGranted) {
+  //         setState(() {
+  //           permissionGranted = true;
+  //         });
+  //       } else if (await Permission.photos.isPermanentlyDenied) {
+  //         await openAppSettings(); // Direct user to settings if permission is permanently denied
+  //       } else {
+  //         setState(() {
+  //           permissionGranted = false;
+  //         });
+  //       }
+  //     }
+  //   } catch (e) {
+  //     print('Error while requesting storage permission: $e');
+  //   }
+  // }
+
+
+  // Future<void> _downloadFile(String fileUrl, String fileName, String token) async {
+  //   try {
+  //     // Get the app's document directory (internal storage)
+  //     final directory = await getApplicationDocumentsDirectory();
+  //     print("Directory: $directory");
+  //
+  //     // Create a specific folder for your app (named after your app)
+  //     final appFolder = Directory('${directory.path}/MyAppFolder');
+  //     print("App Folder: $appFolder");
+  //     if (!await appFolder.exists()) {
+  //       await appFolder.create();  // Create folder if it doesn't exist
+  //     }
+  //
+  //     // Set the file path within your app's folder
+  //     final savePath = '${appFolder.path}/$fileName';
+  //     print("Save Path: $savePath");
+  //
+  //     Dio dio = Dio();
+  //
+  //     // Set up headers with the authorization token
+  //     dio.options.headers = {
+  //       'Authorization': 'Bearer $token',  // Assuming Bearer token for authentication
+  //     };
+  //
+  //     // Use Dio to download the file with the authentication header
+  //     Response response = await dio.download(fileUrl, savePath);
+  //
+  //     // Debugging response
+  //     if (response.statusCode == 200) {
+  //       print('Download successful: $savePath');
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         SnackBar(content: Text('Download complete! File saved to: $savePath')),
+  //       );
+  //     } else {
+  //       print('Download failed with status code: ${response.statusCode}');
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         SnackBar(content: Text('Failed to download the file. Status code: ${response.statusCode}')),
+  //       );
+  //     }
+  //   } catch (e) {
+  //     print('Error while downloading: $e');
+  //     ScaffoldMessenger.of(context).showSnackBar(
+  //       SnackBar(content: Text('Error downloading file.')),
+  //     );
+  //   }
+  // }
+
+  // Future<void> downloadFile(String url, String fileName) async {
+  //   try {
+  //     // Create a Dio instance
+  //     Dio dio = Dio();
+  //
+  //     // Download the file
+  //     Response response = await dio.download(url, fileName);
+  //
+  //     // Check if the download was successful
+  //     if (response.statusCode == 200) {
+  //       print('File downloaded successfully!');
+  //     } else {
+  //       print('Failed to download file. Status code: ${response.statusCode}');
+  //     }
+  //   } catch (e) {
+  //     print('Error downloading file: $e');
+  //   }
+  // }
+
+  Future<void> downloadFile(String url, String fileName,String token) async {
+    try {
+      Dio dio = Dio();
+
+      // Set authentication headers (example: Bearer token)
+      dio.options.headers['Authorization'] = 'Bearer $token';
+
+
+    Response response = await dio.download(url, fileName);
+
+      if (response.statusCode == 200) {
+        print('File downloaded successfully!');
+      } else {
+        print('Download failed. Status code: ${response.statusCode}');
+      }
+    } on DioError catch (e) {
+      if (e.response?.statusCode == 401) {
+        print('Authentication failed.');
+      } else {
+        print('Download error: ${e.message}');
+      }
+    }
+  }
+
+}
+class FileDownloader {
+
+  final Dio _dio = Dio();
+  bool permissionGranted = false;
+
+  static var httpClient = HttpClient();
+
+  Future<File> downloadFile(String url, String filename, String token) async {
+    try {
+      // Ensure the app has storage permission before proceeding
+      bool permissionGranted = await _getStoragePermission();
+      if (!permissionGranted) {
+        throw Exception('Permission to access storage is denied');
+      }
+
+      // Set up the headers to include the Authorization token
+      final headers = {
+        'Authorization': 'Bearer $token',  // Include the token here
+        'Accept': 'application/json',      // You can adjust the Accept header if needed
+      };
+
+      // Make the HTTP request to get the file
+      final response = await http.get(Uri.parse(url), headers: headers);
+
+      // Check if the server responded with a successful status code (200 OK)
+      if (response.statusCode == 200) {
+        // Get the bytes from the response
+        var bytes = response.bodyBytes;
+
+        // Get the application directory to store the file
+        String dir = (await getApplicationDocumentsDirectory()).path;
+
+        // Create a file object in the app directory with the provided filename
+        File file = File('$dir/$filename');
+
+        // Write the bytes to the file
+        await file.writeAsBytes(bytes);
+
+        print('File downloaded to: $file');
+        return file;
+      } else {
+        // Print the response body to better understand the error
+        print('Failed to download file. Status code: ${response.statusCode}');
+        print('Response body: ${response.body}');
+        throw Exception('Failed to download file: ${response.statusCode}');
+      }
+    } catch (e) {
+      print("Error downloading file: $e");
+      rethrow;  // Rethrow the error so it can be handled by the caller
+    }
+  }
+
+  /// Function to request storage permissions
+  Future<bool> _getStoragePermission() async {
+    try {
+      DeviceInfoPlugin plugin = DeviceInfoPlugin();
+      AndroidDeviceInfo android = await plugin.androidInfo;
+
+      if (android.version.sdkInt < 33) {
+        // For Android 12 and below: Request STORAGE permission
+        if (await Permission.storage.request().isGranted) {
+          permissionGranted = true;
+          return true;
+        } else if (await Permission.storage.isPermanentlyDenied) {
+          await openAppSettings(); // Direct user to settings if permission is permanently denied
+          return false;
+        } else {
+          permissionGranted = false;
+          return false;
+        }
+      } else {
+        // For Android 13 and above: Request PHOTOS permission
+        if (await Permission.photos.request().isGranted) {
+          permissionGranted = true;
+          return true;
+        } else if (await Permission.photos.isPermanentlyDenied) {
+          await openAppSettings(); // Direct user to settings if permission is permanently denied
+          return false;
+        } else {
+          permissionGranted = false;
+          return false;
+        }
+      }
+    } catch (e) {
+      print('Error while requesting storage permission: $e');
+      return false;
+    }
   }
 }

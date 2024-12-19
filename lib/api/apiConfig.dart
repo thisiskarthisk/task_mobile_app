@@ -16,5 +16,6 @@ class ApiConfig {
   static const String panelTaskInfo = "/api/v1/user/company/case/panel/task/info/save";
   static const String caseTasks = "/api/v1/user/company/case/tasks";
   static const String panelTaskAdd = "/api/v1/user/company/case/panel/task/add";
+  // static const String additionalDetails = "/api/v1/user/company/case/panel/task/add";
 
 }
