@@ -1,12 +1,22 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:ffmpeg_kit_flutter_audio/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_audio/ffmpeg_kit_config.dart';
+import 'package:ffmpeg_kit_flutter_audio/return_code.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_tms/ui/screen/panel.dart';
 import 'package:flutter_tms/ui/widgets/custom_expansion_tile.dart' as customExpansionTile;
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:flutter_sound/flutter_sound.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:open_file/open_file.dart';
 import '../screen/panelService.dart';
+import 'package:device_info_plus/device_info_plus.dart'; // Import device_info_plus
+import 'package:just_audio/just_audio.dart' as just_audio;
 
 class PanelDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> task;
@@ -14,6 +24,31 @@ class PanelDetailsScreen extends StatefulWidget {
 
   @override
   _PanelDetailsScreenState createState() => _PanelDetailsScreenState();
+}
+
+class Activity {
+  final String content, type, user, date, time;
+  final String? audioFileName;
+  final int id;
+
+  Activity({required this.id,required this.content, required this.type, required this.user, required this.date, required this.time, this.audioFileName});
+
+  factory Activity.fromJson(Map<String, dynamic> json) {
+    return Activity(
+      id: json['id'],
+      content: json['content'],
+      type: json['type'],
+      user: json['user'],
+      date: json['date'],
+      time: json['time'],
+      audioFileName: json['audioFileName'] as String?, // This will handle null values correctly
+    );
+  }
+
+  @override
+  String toString() {
+    return 'Activity{id: $id, content: $content, type: $type, user: $user, date: $date, time: $time, audioFileName: $audioFileName}';
+  }
 }
 
 // Define the ChecklistItem model
@@ -57,12 +92,22 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
 
   String? appUrl, description = '', startDueDate = '', selectedPriority, selectedTaskCompletionType, selectedReminderUnit,
       selectedApprovalRequired, taskCompletionTypeManual, autoStartTaskValue, nameValue, name2Value,
-      autoStartTask, currentEditingField, reminderDuration, TaskApprover, selectedTaskApprovalType, selectedTaskCompletionAuto, selectedLinkedTask, _fileName, _filePath;
-
+      autoStartTask, currentEditingField, reminderDuration, TaskApprover, selectedTaskApprovalType, selectedTaskCompletionAuto, selectedLinkedTask, selectedNextTask, _fileName, _filePath;
+  String? _currentAudioUrl;
   // State to track unsaved changes
   bool hasUnsavedChanges = false;
   bool _isReminderFieldFocused = false;
+  bool _isPaused = false;
   FocusNode _reminderFocusNode = FocusNode();
+
+  FlutterSoundRecorder? _recorder;
+  FlutterSoundPlayer? _player = FlutterSoundPlayer();
+  String? _recordedAudioFilePath;
+  bool _isRecording = false;
+  bool _isPlaying = false;
+
+  Timer? _recordingTimer; // Timer for recording duration
+  int _recordingSeconds = 0; // Recording time counter
 
   var taskDetails;
   // Calendar Info Controllers
@@ -77,6 +122,12 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
   Map<String, dynamic> currEditingFieldValue = {};
   List<ChecklistItem> checklist = [];
   List<String> _attachments = [];
+  List<Activity> activities = [];
+  List<Activity> _activities = [];
+  Map<String, dynamic>? responseData;
+  Map<int, bool> _audioPlaybackState = {};
+
+  just_audio.AudioPlayer player = just_audio.AudioPlayer();
 
   Timer? _keyboardTimer;
 
@@ -86,11 +137,18 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     _taskNameController.text = widget.task['task'] ?? 'Task Name';  // Initialize task name
     _newCheckListGroupNameController = TextEditingController();
     _initializeForm();
-
+    _recorder = FlutterSoundRecorder();
     _startTimeController = TextEditingController();
     _endTimeController = TextEditingController();
 
     _setupKeyboardAutoClose();
+    _initializeRecorder();
+    _initializePlayer();
+    responseData = {};
+  }
+
+  Future<void> _initializePlayer() async {
+    await _player!.openPlayer();
   }
 
   Future<void> _initializeForm() async {
@@ -101,7 +159,162 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     taskId = widget.task['taskId'];
 
     _fetchCasePanelTaskInfo(appUrl, companyId, caseId, panelId, taskId);
+    _player = FlutterSoundPlayer();
   }
+
+  Future<void> _initializeRecorder() async {
+    await _recorder!.openRecorder();
+    if (await Permission.microphone.request().isDenied) {
+      // Request microphone permission
+      await Permission.microphone.request();
+    }
+  }
+
+  Future<void> openAppSettingsIfDenied() async {
+    if (await Permission.manageExternalStorage.isPermanentlyDenied) {
+      await openAppSettings();
+    }
+  }
+
+  Future<bool> _checkAndRequestStoragePermission() async {
+    if (await Permission.storage.isGranted) {
+      // Permission already granted
+      return true;
+    } else if (await Permission.manageExternalStorage.isGranted) {
+      // MANAGE_EXTERNAL_STORAGE granted
+      return true;
+    } else {
+      // Request storage or manage external storage permission
+      final status = await Permission.manageExternalStorage.request();
+      return status.isGranted;
+    }
+  }
+
+  List<Activity> prepareActivities(dynamic rawActivities) {
+    List<Activity> activities = [];
+
+    (rawActivities as List).forEach((dynamic activity) {
+      activities.add(Activity(type: activity['type'], content: activity['content'], user: activity['user'], date: activity['date'], time: activity['time'],
+          audioFileName: activity['type'] == 'audio' ? activity['audioFileName'] : null, id: activity['id']));
+    });
+
+    return activities;
+  }
+
+  Future<void> _startRecording() async {
+    try {
+      // Ensure the recorder is initialized
+      await _initializeRecorder();
+
+      // Get the temporary directory to store the audio file
+      final directory = await getTemporaryDirectory();
+      final filePath = '${directory.path}/audio_comment.aac';
+
+      // Start recording only if it's not already recording
+      if (!_recorder!.isRecording) {
+        await _recorder!.startRecorder(
+          toFile: filePath,
+          codec: Codec.aacADTS,
+        );
+
+        setState(() {
+          _isRecording = true;
+          _recordedAudioFilePath = filePath;
+          _recordingSeconds = 0;
+        });
+
+        // Start a timer to track recording time
+        _recordingTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+          setState(() {
+            _recordingSeconds++;
+          });
+        });
+      }
+    } catch (e) {
+      print("Error starting recorder: $e");
+    }
+  }
+
+  Future<void> _pauseRecording() async {
+    if (_recorder != null && _isRecording && !_isPaused) {
+      await _recorder!.pauseRecorder();
+      setState(() {
+        _isPaused = true;
+      });
+      _recordingTimer?.cancel(); // Stop the timer when paused
+      print("Recording paused: $_recordedAudioFilePath");
+    }
+  }
+
+  Future<void> _resumeRecording() async {
+    if (_recorder != null && _isPaused) {
+      await _recorder!.resumeRecorder();
+      setState(() {
+        _isPaused = false;
+      });
+
+      // Restart the timer
+      _recordingTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+        setState(() {
+          _recordingSeconds++;
+        });
+      });
+
+      print("Recording resumed");
+    }
+  }
+
+  Future<void> _cancelRecording() async {
+    if (_recorder != null && (_isRecording || _isPaused)) {
+      await _recorder!.stopRecorder();
+      _recordingTimer?.cancel();
+      setState(() {
+        _isRecording = false;
+        _isPaused = false;
+        _recordingSeconds = 0;
+      });
+      print("Recording canceled");
+    }
+  }
+
+  // Play the recorded audio
+  Future<void> _playRecording() async {
+    if (_recordedAudioFilePath == null) return;
+
+    if (_isPlaying) {
+      // If already playing, pause the audio
+      await _player?.pausePlayer();
+      setState(() {
+        _isPlaying = false;
+      });
+    } else {
+      // If not playing, start or resume playback
+      if (_player!.isPaused) {
+        // Resume the playback if previously paused
+        await _player?.resumePlayer();
+      } else {
+        // Start playback from the beginning
+        await _player?.startPlayer(
+          fromURI: _recordedAudioFilePath,
+          whenFinished: () {
+            setState(() {
+              _isPlaying = false; // Reset the playing state when finished
+            });
+          },
+        );
+      }
+      setState(() {
+        _isPlaying = true;
+      });
+    }
+  }
+
+  String _formatTime(int seconds) {
+    final minutes = (seconds ~/ 60).toString().padLeft(2, '0');
+    final remainingSeconds = (seconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$remainingSeconds';
+  }
+
 
   void _setupKeyboardAutoClose() {
     _keyboardTimer?.cancel();
@@ -118,6 +331,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
 
   @override
   void dispose() {
+    _messageController.dispose();
     _startDateController.dispose();
     _startTimeController.dispose();
     _endDateController.dispose();
@@ -125,6 +339,8 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     _disposeNewCheckListFields();
     _keyboardTimer?.cancel();
     _reminderFocusNode.dispose();
+    _recorder!.closeRecorder();
+    _player!.closePlayer();
     super.dispose();
   }
 
@@ -152,6 +368,13 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
       setState(() {
         members = taskInfo['data']['members'] ?? [];
         description = taskDetails['description'] ?? 'No description available.';
+        _activities = (taskInfo['data']['activities'] as List<dynamic>)
+            .map((activity) => Activity.fromJson(activity))
+            .toList();
+
+        for (var activity in _activities) {
+          print(activity); // This will call activity.toString()
+        }
 
         // Set the date and time values if they are available
         _startDateController.text = taskDetails['startDueDate'] ?? 'Select Start Date'; // "25-11-2024"
@@ -167,10 +390,13 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
 
         taskCompletionTypeManual = taskCodeLists['taskCompletionType'][taskDetails['taskCompletionTypeManual'].toString()];
         selectedTaskApprovalType = (taskDetails['approvalType'] == null || taskDetails['approvalType'].toString().isEmpty) ? '': taskDetails['approvalType'].toString();
-        selectedTaskCompletionAuto = (taskDetails['taskCompletionType'] == null || taskDetails['taskCompletionType'].toString().isEmpty) ? '' : taskDetails['taskCompletionType'].toString();
+        selectedTaskCompletionAuto = (taskDetails['closeTaskAutomaticallyAt'] == null || taskDetails['closeTaskAutomaticallyAt'].toString().isEmpty) ? '' : taskDetails['closeTaskAutomaticallyAt'].toString();
         selectedLinkedTask = (taskDetails['linkedTask'] == null || taskDetails['linkedTask'].toString().isEmpty) ? '' : taskDetails['linkedTask'].toString();
+        selectedNextTask = (taskDetails['nextTask'] == null || taskDetails['nextTask'].toString().isEmpty) ? '' : taskDetails['nextTask'].toString();
         TaskAssignee = taskDetails['assignee'];
         TaskApprover = taskDetails['approver'].toString();
+
+        print('selectedTaskCompletionAuto: $selectedTaskCompletionAuto');
 
         checklist = List<ChecklistItem>.from(checklistData.map((item) => ChecklistItem.fromJson(item)));
 
@@ -267,10 +493,8 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
             break;
           case 'reminderDuration':
             String? reminderDurationValue = reminderDuration;
-            print('reminderDuration: $reminderDurationValue');
             if(reminderDurationValue != null && reminderDurationValue.trim().length > 0) {
               _putCurrEditingValue('reminderDuration', reminderDurationValue);
-              print('reminderDuration: $reminderDuration');
 
               data = {
                 'fieldName': 'reminderDuration',
@@ -304,24 +528,52 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
               'fieldValue': completionTypeValue
             };
             break;
+          case 'nextTask':
+            String nextTask = _getCurrEditingValue('nextTask');
+
+            print('nextTask: $nextTask');
+
+            data = {
+              'fieldName': 'nextTask',
+              'fieldValue': nextTask != null ? nextTask : ''
+            };
+            break;
+          case 'closeTaskAt':
+            String closeTaskAt = _getCurrEditingValue('closeTaskAt');
+
+            data = {
+              'fieldName': 'closeTaskAt',
+              'fieldValue': closeTaskAt != null ? closeTaskAt : ''
+            };
+            break;
+          case 'linkedTask':
+            String linkedTask = _getCurrEditingValue('linkedTask');
+
+            data = {
+              'fieldName': 'linkedTask',
+              'fieldValue': linkedTask != null ? linkedTask : ''
+            };
+            break;
           case 'approvalType':
             data = {
               'fieldName': 'approvalType',
               'fieldValue': selectedTaskApprovalType
             };
             break;
-          // case 'approver':
-          //   List<int> approver = _getCurrEditingValue('approver');
-          //   var approvalType = _taskInfo.approvalType;
-          //
-          //   data = {
-          //     'fieldName': 'approver',
-          //     'fieldValue': {
-          //       'approver':approver,
-          //       'approvalType':approvalType
-          //     }
-          //   };
-          //   break;
+          case 'approver':
+            var approver = _getCurrEditingValue('approver');
+
+            var approvalType = selectedTaskApprovalType;
+            print('approver: $approvalType');
+
+            data = {
+              'fieldName': 'approver',
+              'fieldValue': {
+                'approver':approver,
+                'approvalType':approvalType
+              }
+            };
+            break;
           case 'checkListGroup':
             String groupName = _getCurrEditingValue('checkListGroup');
 
@@ -367,17 +619,58 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
               };
             }
             break;
+          case 'comment':
+            String comment = _messageController.text.trim();
+
+            if(comment.isNotEmpty) {
+              _putCurrEditingValue('comment', comment);
+
+              data = {
+                'fieldName': 'comment',
+                'fieldValue': comment
+              };
+            }
+            break;
+          case 'audio-comment':
+            if(_recordedAudioFilePath != null) {
+              data = {
+                'fieldName': 'audio-comment',
+              };
+            }
+            break;
+
         }
         if (data != null && data.isNotEmpty) {
           bool isSaved = false;
           dynamic response;
 
-          response = await _panelService.updateTaskInfo(appUrl!, companyId!, caseId!, panelId!, taskId!, data);
+          if (currentEditingField == 'audio-comment' && _recordedAudioFilePath != null) {
+            Map<String, File> files = {
+              'audioFile': File(_recordedAudioFilePath!), // Ensure the path is converted to a File
+            };
+
+            response = await _panelService.attachFileToTask(
+                appUrl!, companyId!, caseId!, panelId!, taskId!, data, files);
+            isSaved = response['success'];
+          } else {
+            response = await _panelService.updateTaskInfo(
+                appUrl!, companyId!, caseId!, panelId!, taskId!, data);
+            isSaved = response['success'];
+          }
           // isSaved = response['success'];
           print('response: $response');
 
           if (response is Map<String, dynamic> && response['success'] == true) {
             await _fetchCasePanelTaskInfo(appUrl, companyId, caseId, panelId, taskId);
+            responseData = response['data'] is Map<String, dynamic>
+                ? response['data'] as Map<String, dynamic>
+                : null;
+
+            switch (currentEditingField) {
+              case 'comment':
+                _activities = prepareActivities(responseData!.containsKey('updatedValue') ? responseData!['updatedValue'] : []);
+                break;
+            }
           }
         }
       }
@@ -385,6 +678,187 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     } catch (e) {
       throw Exception('Error adding task: $e');
     }
+  }
+
+  _openFileInNativeApp(String filePath, [String? fileType]) async {
+    if (await _checkAndRequestStoragePermission()) {
+      File file = File(filePath);
+      if (await file.exists()) {
+        if (fileType == null) {
+          await OpenFile.open(filePath);
+        } else {
+          OpenFile.open(filePath, type: fileType);
+          // convertAacToMp3(filePath);
+        }
+      } else {
+        _showAlert('File not found at $filePath');
+      }
+    } else {
+      print('Permission denied');
+    }
+  }
+
+  Future<void> _downloadAndPlayAudio(Activity activity) async {
+    final audioPlayer = just_audio.AudioPlayer();
+    try {
+      if (!await _checkAndRequestStoragePermission()) {
+        if (await Permission.storage.isDenied) {
+          _showPermissionRationale();
+        } else {
+          _showAlert('Storage permission is required to play audio.');
+        }
+        return;
+      }
+
+      String localDir = (await getApplicationDocumentsDirectory()).path;
+
+      String? downloadedPath = await _panelService.downloadTaskAudioComment(
+          appUrl!, companyId!, caseId!, panelId!, taskId!, activity);
+
+      print('Downloaded Audio Path: $downloadedPath');
+
+      if (downloadedPath == null || downloadedPath.isEmpty) {
+        _showAlert('Failed to download the audio file.');
+        return;
+      }
+      File audioFile = File(downloadedPath);
+      if (!await audioFile.exists()) {
+        _showAlert('Downloaded audio file not found.');
+        return;
+      }
+
+      Future.delayed(Duration(milliseconds: 1000), () async {
+        if(downloadedPath != null) {
+          _openFileInNativeApp(downloadedPath, 'audio/x-aac');
+        }
+      });
+
+      // await audioPlayer.setAudioSource(just_audio.AudioSource.uri(Uri.file(downloadedPath))); // Use setFilePath for local file
+      // await audioPlayer.play();
+
+    } catch (e, stacktrace) {
+      print('_downloadAndPlayAudio() Error:');
+      print(e);
+      print(stacktrace);
+      _showAlert('Error occurred while downloading or playing the audio: $e');
+    }
+  }
+
+  Future<void> _playAudio(String filePath) async {
+    try {
+      // Verify file existence
+      File audioFile = File(filePath.trim());
+      if (!await audioFile.exists()) {
+        print('Audio file not found at: $filePath');
+        _showAlert('Audio file does not exist.');
+        return;
+      }
+
+      // Check permissions
+      int androidVersion = 0;
+      if (Platform.isAndroid) {
+        DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+        AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+        androidVersion = int.parse(androidInfo.version.release);
+        print('Android Version: $androidVersion');
+      }
+
+      bool isStorageDenied = await Permission.storage.request().isDenied;
+      print('Permission.storage.isDenied: $isStorageDenied');
+
+      if ((Platform.isAndroid &&
+              androidVersion >= 13 &&
+              await Permission.audio.request().isDenied)) {
+        _showPermissionRationale(); // Show rationale to user
+        return;
+      }
+
+      // Initialize the FlutterSoundPlayer if not already open
+      if (_player == null || !_player!.isOpen()) {
+        await _player?.openPlayer();
+        print('Player opened.');
+      }
+
+      // Determine codec based on file extension
+      Codec codec = filePath.endsWith('.aac') ? Codec.aacADTS : Codec.aacMP4;
+
+      // Start playback with explicit codec
+      await _player?.startPlayer(
+        fromURI: 'file://$filePath',
+        codec: codec,
+        whenFinished: () {
+          print('Audio playback finished.');
+          setState(() {
+            _isPlaying = false;
+          });
+        },
+      );
+
+      setState(() {
+        _isPlaying = true;
+      });
+      print('Playing audio from: $filePath');
+    } catch (e) {
+      print('Error while playing audio: $e');
+      _showAlert('Error while playing audio: $e');
+    }
+  }
+
+  void _showPermissionRationale() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Permission Required'),
+        content: Text(
+            'Storage permission is required to download and play audio files. Please grant the permission.'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              openAppSettings(); // Request permission after the explanation
+            },
+            child: Text('Grant Permission'),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+  // Future<void> _playAudio(String filePath) async {
+  //   if (_isPlaying) {
+  //     await _audioPlayer.stop();
+  //   } else {
+  //     int result = await _audioPlayer.play(DeviceFileSource(filePath));
+  //     if (result == 1) {
+  //       setState(() {
+  //         _isPlaying = true;
+  //         _currentAudioUrl = filePath;
+  //       });
+  //       _audioPlayer.onPlayerComplete.listen((event) {
+  //         setState(() {
+  //           _isPlaying = false;
+  //           _currentAudioUrl = null;
+  //         });
+  //       });
+  //     }
+  //   }
+  // }
+
+  void _showAlert(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Alert'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _onFieldValueChange(String fieldName, String fieldValue) async {
@@ -592,7 +1066,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     );
   }
 
-// Method to show the file picker and then display the file name and icon
+  // Method to show the file picker and then display the file name and icon
   Future<void> _showAttachFileDialog() async {
     // Open the file picker
     FilePickerResult? result = await FilePicker.platform.pickFiles();
@@ -1320,6 +1794,13 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     Map<String, String> taskApprovalRequired = taskCodelists!['approvalRequired'].cast<String, String>();
     Map<String, String> taskCompletionAuto = taskCodelists!['taskCompletionAuto'].cast<String, String>();
     Map<String, String> linkedTasks = taskCodelists!['linkedTasks'].cast<String, String>();
+    var autoStartTask = taskCodelists?['autoStartTasks'];
+
+    if (autoStartTask != null && autoStartTask is Map && autoStartTask.isNotEmpty) {
+      Map<String, String> autoStartTasks = Map<String, String>.from(taskCodelists?['autoStartTasks']);
+      List<MapEntry<String, String>> tasksListEntries = autoStartTasks.entries.toList();
+
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -1373,7 +1854,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
               ),
               SizedBox(width: 20),
 
-              if (completionTypeValue == 2)
+              if (completionTypeValue == 2 && selectedTaskCompletionAuto != null)
               Expanded(
                 flex: 1,
                 child: Column(
@@ -1384,23 +1865,30 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     SizedBox(height: 8),
-                    DropdownButton<String>(
-                      value: selectedTaskCompletionAuto,
-                      items: taskCompletionAuto.entries.map((entry) {
-                        String value = entry.key;
-                        String label = entry.value;
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(label),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          selectedTaskCompletionAuto = newValue;
-                        });
-                      },
-                      hint: Text('--Select--'),
-                    ),
+                    if (taskCompletionAuto.isNotEmpty)
+                      DropdownButton<String>(
+                        value: taskCompletionAuto.containsKey(selectedTaskCompletionAuto)
+                            ? selectedTaskCompletionAuto
+                            : null,
+                        items: taskCompletionAuto.entries.map((entry) {
+                          String value = entry.key;
+                          String label = entry.value;
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(label),
+                          );
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            selectedTaskCompletionAuto = newValue;
+
+                            currentEditingField = 'closeTaskAt';
+                            _putCurrEditingValue('closeTaskAt', newValue);
+                            _onBtnSaveTaskInfoClicked();
+                          });
+                        },
+                        hint: Text('--Select--'),
+                      ),
                   ],
                 ),
               ),
@@ -1501,6 +1989,9 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                         onChanged: (String? newValue) {
                           setState(() {
                             TaskApprover = newValue;
+                            currentEditingField = 'approver';
+                            _putCurrEditingValue('approver', newValue);
+                            _onBtnSaveTaskInfoClicked();
                           });
                         },
                         hint: Text('Select a Member'),
@@ -1518,7 +2009,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (selectedTaskApprovalType != null && selectedTaskApprovalType == '1')
+              if (selectedTaskApprovalType != null && selectedTaskApprovalType == '1' && (selectedTaskCompletionAuto == '2' || selectedTaskCompletionAuto == '3'))
                 Expanded(
                   flex: 1,
                   child: Column(
@@ -1543,6 +2034,10 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                           onChanged: (String? newValue) {
                             setState(() {
                               selectedLinkedTask = newValue;
+
+                              currentEditingField = 'linkedTask';
+                              _putCurrEditingValue('linkedTask', newValue);
+                              _onBtnSaveTaskInfoClicked();
                             });
                           },
                           hint: Text('--Select a Task--'),
@@ -1569,27 +2064,30 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                         style: TextStyle(fontWeight: FontWeight.bold),
                       ),
                       SizedBox(height: 0),
-                      if (members.isNotEmpty)
+                      if (autoStartTask != null && autoStartTask is Map && autoStartTask.isNotEmpty)
                         DropdownButton<String>(
-                          value: members.any((member) => member['id'].toString() == TaskApprover)
-                              ? TaskApprover
+                          value: autoStartTask.containsKey(selectedNextTask)
+                              ? selectedNextTask
                               : null,
-                          items: members.map<DropdownMenuItem<String>>((member) {
+                          items: autoStartTask.entries.map((entry) {
+                            String value = entry.key;
+                            String label = entry.value;
                             return DropdownMenuItem<String>(
-                              value: member['id']?.toString(),
-                              child: Text(member['name'] ?? 'Unknown'),
+                              value: value,
+                              child: Text(label),
                             );
                           }).toList(),
                           onChanged: (String? newValue) {
                             setState(() {
-                              TaskApprover = newValue;
+                              selectedNextTask = newValue;
+                              currentEditingField = 'nextTask';
+                              _putCurrEditingValue('nextTask', newValue);
+                              _onBtnSaveTaskInfoClicked();
                             });
                           },
-                          hint: Text('Select a Member'),
+                          hint: Text('--Select a Next Task--'),
                           isExpanded: true,
-                        )
-                      else
-                        Text('No approvers available'),
+                        ),
                     ],
                   ),
                 ),
@@ -1611,54 +2109,345 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
   }
 
   Widget buildActivitySection() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10.0),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: Icon(Icons.message, color: Colors.blue), onPressed: () {  },
-                ),
-
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: TextField(
-                      controller: _messageController,
-                      decoration: InputDecoration(
-                        hintText: "Enter the comment",
-                        contentPadding: EdgeInsets.symmetric(vertical: 10.0, horizontal: 16.0),
-                        border: UnderlineInputBorder(
-                          borderSide: BorderSide(color: Colors.blue),
-                        ),
-                        suffixIcon: IconButton(
-                          icon: Icon(Icons.send, color: Colors.blue),
-                          onPressed: () {
-                            _messageController.clear();
-                          },
+    return SizedBox(
+      height: 400, // Fixed height
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10.0),
+        child: Column(
+          children: [
+            // Input Section
+            if (!_isRecording) // Show comment input when not recording
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10.0),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.message, color: Colors.blue),
+                      onPressed: () {},
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        child: TextField(
+                          controller: _messageController,
+                          decoration: InputDecoration(
+                            hintText: "Enter the comment",
+                            contentPadding: EdgeInsets.symmetric(
+                                vertical: 10.0, horizontal: 16.0),
+                            border: UnderlineInputBorder(
+                              borderSide: BorderSide(color: Colors.blue),
+                            ),
+                            suffixIcon: IconButton(
+                              icon: Icon(Icons.send, color: Colors.blue),
+                              onPressed: () {
+                                currentEditingField = 'comment';
+                                _onBtnSaveTaskInfoClicked();
+                                _messageController.clear();
+                              },
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                    IconButton(
+                      icon: Icon(Icons.mic, color: Colors.blue),
+                      onPressed: () async {
+                        await _startRecording();
+                        setState(() {
+                          _isRecording = true;
+                        });
+                      },
+                    ),
+                  ],
                 ),
+              )
+            else // Show recording controls
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.message, color: Colors.blue),
+                    onPressed: () {},
+                  ),
+                  if (_recordedAudioFilePath != null && _isRecording)
+                    IconButton(
+                      icon: Icon(
+                        _isPlaying ? Icons.pause : Icons.play_arrow,
+                        color: Colors.blue, // Choose color based on state
+                      ),
+                      onPressed: _playRecording,
+                    ),
+                    Text(
+                      "${_formatTime(_recordingSeconds)}",
+                      style: TextStyle(fontSize: 14.0, color: Colors.black),
+                    ),
+                    SizedBox(width: 5),
+                  // Pause/Resume Toggle
+                  IconButton(
+                    icon: Icon(
+                      _isPaused ? Icons.restore_outlined : Icons.stop,
+                      color: _isPaused ? Colors.black : Colors.blue,
+                    ),
+                    onPressed: () async {
+                      if (_isPaused) {
+                        await _resumeRecording();
+                      } else {
+                        await _pauseRecording();
+                      }
+                    },
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.cancel, color: Colors.red),
+                    onPressed: () async {
+                      await _cancelRecording();
+                    },
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.send, color: Colors.blue),
+                    onPressed: () {
+                      currentEditingField = 'audio-comment';
+                      _onBtnSaveTaskInfoClicked();
+                      setState(() {
+                        _isRecording = false;
+                        _recordingSeconds = 0;
+                      });
+                    },
+                  ),
+                ],
+              ),
 
-                // Mic Icon on the right
-                IconButton(
-                  icon: Icon(Icons.mic, color: Colors.blue),
-                  onPressed: () {
-                    // Add functionality for mic icon, e.g., start voice recording
+            // Displaying activity list
+            if (_activities.isNotEmpty)
+              Expanded(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _activities.length,
+                  itemBuilder: (context, index) {
+                    final activity = _activities[index];
+                    String avatarInitial = activity.user.isNotEmpty
+                        ? activity.user[0].toUpperCase()
+                        : "?";
+                    return Card(
+                      color: Colors.white,
+                      elevation: 2,
+                      margin:
+                      EdgeInsets.symmetric(vertical: 10.0, horizontal: 10.0),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: Colors.blue,
+                          child: Text(
+                            avatarInitial,
+                            style: TextStyle(
+                                color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        title: Row(
+                          children: [
+                            if (activity.type == 'audio')
+                              Icon(Icons.mic, color: Colors.black),
+                            SizedBox(width: 8.0),
+                            Text(activity.type == 'text' ? activity.content : ''),
+                          ],
+                        ),
+                        subtitle: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Icon(Icons.calendar_today,
+                                color: Colors.grey, size: 16),
+                            SizedBox(width: 2.0),
+                            Text(
+                              "${activity.date}",
+                              style:
+                              TextStyle(fontSize: 12.0, color: Colors.grey),
+                            ),
+                            SizedBox(width: 4.0),
+                            Icon(Icons.access_time,
+                                color: Colors.grey, size: 16),
+                            SizedBox(width: 2.0),
+                            Text(
+                              "${activity.time}",
+                              style:
+                              TextStyle(fontSize: 12.0, color: Colors.grey),
+                            ),
+                            if (activity.type == 'audio')
+                              IconButton(
+                                icon: Icon(
+                                  _isPlaying &&
+                                      _currentAudioUrl == activity.content
+                                      ? Icons.pause
+                                      : Icons.play_arrow,
+                                  color: Colors.blueAccent,
+                                ),
+                                onPressed: () {
+                                  _downloadAndPlayAudio(activity);
+                                },
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
                   },
                 ),
-              ],
-            ),
-          ),
-        ],
+              )
+            else
+              Center(child: Text('No activities available.')),
+          ],
+        ),
       ),
     );
   }
+
+
+  // Widget buildActivitySection() {
+  //   return SizedBox(
+  //     height: 400, // Define a fixed height or constrain it dynamically.
+  //     child: Padding(
+  //       padding: const EdgeInsets.symmetric(vertical: 10.0),
+  //       child: Column(
+  //         children: [
+  //           // Input Section
+  //           Padding(
+  //             padding: const EdgeInsets.symmetric(vertical: 10.0),
+  //             child: Row(
+  //               children: [
+  //                 IconButton(
+  //                   icon: Icon(Icons.message, color: Colors.blue),
+  //                   onPressed: () {},
+  //                 ),
+  //                 Expanded(
+  //                   child: Padding(
+  //                     padding: const EdgeInsets.symmetric(horizontal: 8.0),
+  //                     child: TextField(
+  //                       controller: _messageController,
+  //                       decoration: InputDecoration(
+  //                         hintText: "Enter the comment",
+  //                         contentPadding: EdgeInsets.symmetric(
+  //                             vertical: 10.0, horizontal: 16.0),
+  //                         border: UnderlineInputBorder(
+  //                           borderSide: BorderSide(color: Colors.blue),
+  //                         ),
+  //                         suffixIcon: IconButton(
+  //                           icon: Icon(Icons.send, color: Colors.blue),
+  //                           onPressed: () {
+  //                             // Handle saving activity
+  //                             currentEditingField = 'comment';
+  //                             _onBtnSaveTaskInfoClicked();
+  //                           },
+  //                         ),
+  //                       ),
+  //                     ),
+  //                   ),
+  //                 ),
+  //                 IconButton(
+  //                   icon: Icon(Icons.mic, color: _isRecording ? Colors.red : Colors.blue),
+  //                   onPressed: () async {
+  //                     // Handle recording audio
+  //                     if (_isRecording) {
+  //                       await _stopRecording();
+  //                       currentEditingField = 'audio-comment';
+  //                       _onBtnSaveTaskInfoClicked();
+  //                     } else {
+  //                       await _startRecording();
+  //                     }
+  //                   },
+  //                 ),
+  //                 if (_recordedAudioFilePath != null)
+  //                   IconButton(
+  //                     icon: Icon(
+  //                         _isPlaying ? Icons.pause : Icons.play_arrow,
+  //                         color: Colors.green),
+  //                     onPressed: () async {
+  //                       // Handle playing recorded audio
+  //                       if (_player!.isPlaying) {
+  //                         await _stopPlaying();
+  //                       } else {
+  //                         await _playRecordedAudio(_recordedAudioFilePath!);
+  //                       }
+  //                     },
+  //                   ),
+  //               ],
+  //             ),
+  //           ),
+  //
+  //           // Displaying activity list
+  //           if (_activities.isNotEmpty)
+  //             Expanded(
+  //               child: ListView.builder(
+  //                 shrinkWrap: true,
+  //                 itemCount: _activities.length,
+  //                 itemBuilder: (context, index) {
+  //                   final activity = _activities[index];
+  //                   String avatarInitial = activity.user.isNotEmpty
+  //                       ? activity.user[0].toUpperCase()
+  //                       : "?"; // Fallback for empty user names.
+  //                   return Card(
+  //                     margin: EdgeInsets.symmetric(vertical: 10.0, horizontal: 10.0),
+  //                     color: Colors.white,
+  //                     child: ListTile(
+  //                       leading: CircleAvatar(
+  //                         backgroundColor: Colors.blue,
+  //                         child: Text(
+  //                           avatarInitial,
+  //                           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+  //                         ),
+  //                       ),
+  //                       // title: Text(activity.user),
+  //                       title:  Row(
+  //                         children: [
+  //                           if (activity.type == 'audio')
+  //                             Icon(Icons.mic, color: Colors.black),
+  //                           SizedBox(width: 8.0), // Spacing between icon and title
+  //                           Text(activity.type == 'text' ? activity.content : ''),
+  //                         ],
+  //                       ),
+  //                         subtitle: Row(
+  //                           crossAxisAlignment: CrossAxisAlignment.center,
+  //                           children: [
+  //                             // Date Icon and Date Value
+  //                             Icon(Icons.calendar_today, color: Colors.grey, size: 16),
+  //                             SizedBox(width: 1.0),
+  //                             Text(
+  //                               "${activity.date}",
+  //                               style: TextStyle(fontSize: 12.0, color: Colors.grey),
+  //                             ),
+  //                             SizedBox(width: 4.0), // Space between date and time
+  //
+  //                             // Time Icon and Time Value
+  //                             Icon(Icons.access_time, color: Colors.grey, size: 16),
+  //                             SizedBox(width: 1.0),
+  //                             Text(
+  //                               "${activity.time}",
+  //                               style: TextStyle(fontSize: 12.0, color: Colors.grey),
+  //                             ),
+  //                             SizedBox(width: 8.0), // Space between time and audio control
+  //
+  //                             if (activity.type == 'audio')
+  //                               IconButton(
+  //                                 icon: Icon(
+  //                                   _isPlaying && _currentAudioUrl == activity.content
+  //                                       ? Icons.pause
+  //                                       : Icons.play_arrow,
+  //                                   color: Colors.blueAccent,
+  //                                 ),
+  //                                 onPressed: () {
+  //                                   // _playPauseAudio(activity.content);
+  //                                   _downloadAndPlayAudio(activity);
+  //                                 },
+  //                               ),
+  //                           ],
+  //                       ),
+  //                     ),
+  //                   );
+  //                 },
+  //               ),
+  //             )
+  //           else
+  //             Center(child: Text('No activities available.')),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
 
   Future<void> _showDeleteCheckListItemModal(BuildContext context, String checklistItemId) async {
     await showDialog(

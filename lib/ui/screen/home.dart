@@ -4,12 +4,11 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:flutter_tms/ui/screen/auth/login.dart';
 import 'package:flutter_tms/ui/screen/notifications.dart';
-import 'package:flutter_tms/ui/screen/task_info.dart';
 import 'package:flutter_tms/api/authService.dart';
 import 'package:flutter_tms/api/apiConfig.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import './common/commonService.dart';
-import '../../api/apiConfig.dart';
+import 'bottomBar.dart';
 
 class HomeScreen extends StatefulWidget {
   final String userName;
@@ -508,7 +507,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (context) => TaskInfoScreen(),
+                                          builder: (context) => bottomBar(),
                                         ),
                                       );
                                     },

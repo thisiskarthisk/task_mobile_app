@@ -3,7 +3,7 @@ import 'package:flutter_tms/ui/screen/cases.dart';
 import 'package:flutter_tms/ui/screen/dashboard.dart';
 import 'package:flutter_tms/ui/screen/favorites.dart';
 import 'package:flutter_tms/ui/screen/notifications.dart';
-import 'package:flutter_tms/ui/screen/task_info.dart';
+import 'package:flutter_tms/ui/screen/bottomBar.dart';
 import 'ui/screen/auth/login.dart'; // Import LoginScreen
 import 'ui/screen/home.dart';  // Import HomeScreen
 import 'ui/screen/auth/splash_screen.dart';
@@ -46,7 +46,7 @@ class Tms extends StatelessWidget {
               );
             }
           },
-        '/task_info': (context) => TaskInfoScreen(),
+        '/task_info': (context) => bottomBar(),
         '/cases': (context) => CasesScreen(),
         '/favorites': (context) => FavoritesScreen(),
         '/dashboard': (context) => DashboardScreen(),

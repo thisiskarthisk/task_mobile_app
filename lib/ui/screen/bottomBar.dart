@@ -8,12 +8,12 @@ import 'package:flutter_tms/ui/screen/home.dart';
 import 'package:flutter_tms/ui/screen/notifications.dart';
 import 'package:flutter_tms/api/authService.dart';
 
-class TaskInfoScreen extends StatefulWidget {
+class bottomBar extends StatefulWidget {
   @override
-  _TaskInfoScreenState createState() => _TaskInfoScreenState();
+  _bottomBarState createState() => _bottomBarState();
 }
 
-class _TaskInfoScreenState extends State<TaskInfoScreen> with SingleTickerProviderStateMixin {
+class _bottomBarState extends State<bottomBar> with SingleTickerProviderStateMixin {
   TabController? _tabController;
   final AuthService authService = AuthService();
   final List<String> _titles = ["Cases", "Favorites", "Dashboard", "Notifications"];
