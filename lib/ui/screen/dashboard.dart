@@ -200,7 +200,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           right: 5,
                           top: 34,
                           child: Container(
-                            height: 15, // Set height for the badge
+                            height: 20, // Set height for the badge
                             width: 15,
                             padding: EdgeInsets.all(2),
                             decoration: BoxDecoration(
@@ -246,7 +246,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             right: 5,
                             top: 34,
                             child: Container(
-                              height: 15, // Set height for the badge
+                              height: 20, // Set height for the badge
                               width: 15,
                               padding: EdgeInsets.all(2),
                               decoration: BoxDecoration(
