@@ -1,13 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter_tms/ui/screen/panelTaskInfo.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/http.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../api/authService.dart';
 import '../../api/apiConfig.dart';
-import '../screen/panel.dart';
 
 class panelService {
   final AuthService _authService = AuthService();
@@ -127,15 +126,11 @@ class panelService {
     data['panelId'] = panelId;
     data['taskId'] = taskId;
 
-    print('Attach file Request: ' + jsonEncode(data));
-
     final response = await multipartRequest(url, data, files, header: {'Authorization' : 'Bearer $idt'});
-
-    print('Attach file Response: ');
-    // print(response);
 
     return response;
   }
+
   // multipart file request function
   Future<dynamic> multipartRequest(String url, Map<String, dynamic> json, Map<String, File> files, {required Map<String, String> header}) async {
     var responseJson;
@@ -172,7 +167,7 @@ class panelService {
       final response = await request.send();
       final responseData = await http.Response.fromStream(response);
       responseJson = jsonDecode(responseData.body);
-      // return await http.Response.fromStream(response);
+
     } catch (error, errorContent) {
       print(error);
       print(errorContent);
@@ -182,7 +177,6 @@ class panelService {
     return responseJson;
   }
 
-
   // download task audio comment function
   Future<String?> downloadTaskAudioComment(String domainUrl, int companyId, int caseId, int panelId, int taskId, Activity _audioComment) async {
     String? _audioFileLocalPath;
@@ -191,8 +185,6 @@ class panelService {
 
     String _audioCommentURL = _audioComment.content;
     String? _audioFileName = _audioComment.audioFileName;
-    String? _audioFileDate = _audioComment.date;
-    String? _audioFileTime = _audioComment.time;
 
     Map<String, String> headers = {
       'Authorization' : 'Bearer $idt',
@@ -209,12 +201,10 @@ class panelService {
       // if(!isExists) {
         _audioCommentURL += '?companyId=$companyId&caseId=$caseId&panelId=$panelId&taskId=$taskId';
 
-        print('_audioCommentURL: $_audioCommentURL');
         final Response response = await http.get(Uri.parse(_audioCommentURL), headers: headers);
 
         await _audioFile.writeAsBytes(response.bodyBytes);
       // }
-
       _audioFileLocalPath = _audioFile.path;
     });
 
@@ -249,21 +239,20 @@ class panelService {
     return _audioCommentsDir.path;
   }
 
-}
-
-
-  Future<FetchTaskAdditionalDetailsResponse> fetchTaskAdditionalDetails(String domainUrl, int companyId, String caseId, String panelId, String taskId, int type,
-      String additionalDetailName, String additionalURLParams) async {
+  Future<FetchTaskAdditionalDetailsResponse> fetchTaskAdditionalDetails(String domainUrl, int companyId, int caseId,int panelId,
+      int taskId, int type, String additionalDetailName, [String? additionalURLParams]) async
+  {
     final idt = await _authService.getIdt();
 
-    if(additionalURLParams.trim().isNotEmpty && additionalURLParams.length > 0) {
-      additionalURLParams = '&' + additionalURLParams;
+    if (additionalURLParams != null && additionalURLParams.length > 0) {
+      additionalURLParams = '&$additionalURLParams';
     }
 
-    print('companyId: $companyId, caseId: $caseId, panelId: $panelId,taskId: $taskId, type: $type, get: $additionalDetailName, $additionalURLParams');
+    final String url =
+        '$domainUrl${ApiConfig.taskAdditionalDetail}?companyId=$companyId&caseId=$caseId&panelId=$panelId&taskId=$taskId&type=$type&get=$additionalDetailName$additionalURLParams';
 
-    final String url = '$domainUrl/api/v1/user/company/case/panel/task/additional-details?'
-        '&companyId=$companyId&caseId=$caseId&panelId=$panelId&taskId=$taskId&type=$type&get=$additionalDetailName$additionalURLParams';
+    print('fetchTaskAdditionalDetails()');
+    print('url: $url');
 
     final response = await http.get(
       Uri.parse(url),
@@ -274,76 +263,134 @@ class panelService {
       },
     );
 
-    print('Task Additional Details fetch response: ');
-    print(response.body);
-
-    return FetchTaskAdditionalDetailsResponse(response);
-  }
-
-}
-
-class FetchTaskAdditionalDetailsResponse {
-  bool success = false;
-  String errorMessage = '';
-  List<History> attachmentHistory = [];
-
-  FetchTaskAdditionalDetailsResponse(dynamic response) {
-    try {
-      // Check for success
-      if (response['success'] == true) {
-        success = true;
-
-        // Safely parse documentHistory
-        final _rawDocHistory = response['data']?['documentHistory'];
-        print("_rawDocHistory : $_rawDocHistory");
-        if (_rawDocHistory is List) {
-          for (var _history in _rawDocHistory) {
-            if (_history is Map<String, dynamic>) {
-              attachmentHistory.add(History(
-                documentId: _history['documentId']?.toString() ?? '',
-                versionId: _history['versionId']?.toString() ?? '',
-                versionNo: _history['versionNo']?.toString() ?? '',
-                name: _history['name']?.toString() ?? '',
-                url: _history['url']?.toString() ?? '',
-                date: _history['date']?.toString() ?? '',
-                time: _history['time']?.toString() ?? '',
-                fileName: _history['fileName']?.toString() ?? '',
-              ));
-            } else {
-              print('Unexpected item in documentHistory: $_history');
-            }
-          }
-        } else {
-          print('Error: documentHistory is not a list or is missing');
-        }
-      } else {
-        // Handle error message
-        errorMessage = response['message']?.toString() ??
-            response['data']?['errorMessage']?.toString() ??
-            'Unknown error occurred';
-        print('Error from server: $errorMessage');
+    if (response.statusCode == 200) {
+      try {
+        final data = json.decode(response.body);
+        print('data: fetchTaskAdditionalDetails()-> $data');
+        return FetchTaskAdditionalDetailsResponse.fromJson(data);
+      } catch (e) {
+        throw Exception('Error parsing response: $e');
       }
-    } catch (e) {
-      // Catch unexpected errors
-      errorMessage = 'Error parsing response: $e';
-      print('Error in FetchTaskAdditionalDetailsResponse: $e');
+    } else {
+      throw Exception('Failed to fetch additional details: ${response.statusCode}');
     }
   }
 
-  
+  Future<String> downloadTaskAttachment(String domainUrl, int companyId, int caseId, int panelId, int taskId, Attachment _attachment, [int? versionHistoryIndex]) async {
+    final idt = await _authService.getIdt();
+    String _attachLocalPath = '';
+    String? comId = '${companyId}';
+    String _attachmentUrl = _attachment.url;
+    String? version;
+    String? downloadFileName;
+
+    Map<String, String> headers = {
+      'Authorization' : 'Bearer $idt',
+      'Accept': 'application/json',
+      'Content-Type': 'image/*',
+    };
+
+    if(versionHistoryIndex != null) {
+      _attachmentUrl = _attachment.documentHistoryList[versionHistoryIndex].url;
+      version = _attachment.documentHistoryList[versionHistoryIndex].versionNo.toString();
+      downloadFileName = _attachment.documentHistoryList[versionHistoryIndex].fileName;
+    } else {
+      downloadFileName = _attachment.fileName;
+    }
+
+    String _attachFolder = await getAttachmentsStoragePath('$taskId', '${_attachment.id}', '$version');
+    String _attachFilePath = _attachFolder + '/' + downloadFileName!;
+    File _attachFile = File(_attachFilePath);
+
+    await _attachFile.exists().then((isExists) async {
+      if(!isExists) {
+        _attachmentUrl += '?companyId=$comId&caseId=$caseId&panelId=$panelId&taskId=$taskId';
+
+        final response = await http.get((Uri.parse(_attachmentUrl)), headers: headers);
+        await _attachFile.writeAsBytes(response.bodyBytes);
+      }
+
+      _attachLocalPath = _attachFile.path;
+    });
+    return _attachLocalPath;
+  }
+
+  Future<String> getAttachmentsStoragePath(String taskId, String docId, String version) async {
+    String path = await getApplicationDownloadPath();
+    version = version.isEmpty ? '' : '/v' + version;
+    Directory _attachmentsDir = Directory(path + '/attachments/$taskId/$docId$version');
+
+    await _attachmentsDir.exists().then((bool isExists) async {
+      if(!isExists) {
+        await _attachmentsDir.create(recursive: true);
+      }
+    });
+
+    return _attachmentsDir.path;
+  }
 }
 
-class History {
-  final String documentId;
-  final String versionId;
-  final String versionNo;
-  final String name;
-  final String url;
-  final String date;
-  final String time;
-  final String fileName;
+class Activity {
+  final String content, type, user, date, time;
+  final String? audioFileName;
+  final int id;
 
-  History({
+  Activity({required this.id,required this.content, required this.type, required this.user, required this.date, required this.time, this.audioFileName});
+
+  factory Activity.fromJson(Map<String, dynamic> json) {
+    return Activity(
+      id: json['id'],
+      content: json['content'],
+      type: json['type'],
+      user: json['user'],
+      date: json['date'],
+      time: json['time'],
+      audioFileName: json['audioFileName'] as String?,
+    );
+  }
+
+  @override
+  String toString() {
+    return 'Activity{id: $id, content: $content, type: $type, user: $user, date: $date, time: $time, audioFileName: $audioFileName}';
+  }
+}
+
+class Attachment {
+  final String name, url, type, date, time;
+  final String? fileName;
+  final int id;
+  bool isDocumentHistoryShown = false;
+  List<DocumentHistory> documentHistoryList;
+
+  Attachment({required this.id,required this.name, required this.url, required this.type, required this.date, required this.time, this.fileName, this.documentHistoryList = const [],});
+
+  factory Attachment.fromJson(Map<String, dynamic> json) {
+    return Attachment(
+      id: json['id'],
+      name: json['name'],
+      url: json['url'],
+      type: json['type'],
+      date: json['date'],
+      time: json['time'],
+      fileName: json['fileName'] as String?,
+      documentHistoryList: (json['documentHistoryList'] as List<dynamic>?)
+          ?.map((e) => DocumentHistory.fromJson(e as Map<String, dynamic>))
+          .toList() ??
+          [],
+    );
+  }
+
+  @override
+  String toString() {
+    return 'Attachment{id: $id, name: $name, url: $url, type: $type, date: $date, time: $time, fileName: $fileName, documentHistoryList: $documentHistoryList}';
+  }
+}
+
+class DocumentHistory {
+  final int documentId, versionId, versionNo;
+  final String name, url, date, time, fileName;
+
+  DocumentHistory({
     required this.documentId,
     required this.versionId,
     required this.versionNo,
@@ -354,8 +401,103 @@ class History {
     required this.fileName,
   });
 
-  @override
-  String toString() {
-    return 'History(documentId: $documentId, versionId: $versionId, versionNo: $versionNo, name: $name, url: $url, date: $date, time: $time, fileName: $fileName)';
+  factory DocumentHistory.fromJson(Map<String, dynamic> json) {
+    return DocumentHistory(
+      documentId: json['documentId'],
+      versionId: json['versionId'],
+      versionNo: json['versionNo'],
+      name: json['name'],
+      url: json['url'],
+      date: json['date'],
+      time: json['time'],
+      fileName: json['fileName'],
+    );
+  }
+}
+
+// Define the ChecklistItem model
+class ChecklistItem {
+  bool isChecked;
+  String id, text, groupName, groupId;
+  TextEditingController textEditingController;
+
+  ChecklistItem({required this.isChecked,required this.id,required this.groupId, required this.text, required this.groupName, TextEditingController? textEditingController,}) : textEditingController = textEditingController ?? TextEditingController(text: text);
+
+  factory ChecklistItem.fromJson(Map<String, dynamic> json) {
+    return ChecklistItem(
+      isChecked: json['checked'] ?? false,
+      text: json['name'] ?? '',
+      groupName: json['groupName'] ?? '',
+      groupId: json['groupId'].toString() ?? '',
+      id: json['id'].toString() ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'checked': isChecked,
+      'name': text,
+      'groupName': groupName,
+      'groupId': groupId,
+      'id': id,
+    };
+  }
+}
+
+class FetchTaskAdditionalDetailsResponse {
+  bool success;
+  String errorMessage;
+  List<DocumentHistory> documentHistory;
+
+  FetchTaskAdditionalDetailsResponse({
+    required this.success,
+    required this.errorMessage,
+    required this.documentHistory,
+  });
+
+  /// Factory constructor to safely parse JSON
+  factory FetchTaskAdditionalDetailsResponse.fromJson(Map<String, dynamic> response) {
+    try {
+      // Parse success flag
+      final bool success = response['success'] == true;
+
+      // Parse error message if the response indicates failure
+      final String errorMessage = success
+          ? ''
+          : response['message']?.toString() ??
+          response['data']?['errorMessage']?.toString() ??
+          'Unknown error occurred';
+
+      // Parse documentHistory
+      final List<DocumentHistory> documentHistory = [];
+      if (success) {
+        final dynamic rawDocHistory = response['data']?['documentHistory'];
+        if (rawDocHistory is List) {
+          for (var history in rawDocHistory) {
+            if (history is Map<String, dynamic>) {
+              documentHistory.add(DocumentHistory.fromJson(history));
+            } else {
+              print('Unexpected item in documentHistory: $history');
+            }
+          }
+        } else {
+          print('Error: documentHistory is not a list or is missing');
+        }
+      }
+
+      return FetchTaskAdditionalDetailsResponse(
+        success: success,
+        errorMessage: errorMessage,
+        documentHistory: documentHistory,
+      );
+    } catch (e, stack) {
+      print('Error in FetchTaskAdditionalDetailsResponse: $e');
+      print(stack);
+      return FetchTaskAdditionalDetailsResponse(
+        success: false,
+        errorMessage: 'Error parsing response: $e',
+        documentHistory: [],
+      );
+    }
   }
 }

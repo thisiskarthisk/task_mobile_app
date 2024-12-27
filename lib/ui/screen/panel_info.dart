@@ -4,6 +4,7 @@ import 'package:flutter_tms/ui/widgets/custom_expansion_tile.dart' as customExpa
 import 'package:http/http.dart' as http;
 import 'package:flutter_tms/api/authService.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../api/apiConfig.dart';
 import 'common/commonService.dart';
 
 
@@ -28,6 +29,7 @@ class _PanelInfoScreenState extends State<PanelInfoScreen> {
 
   final AuthService _authService = AuthService();
   final commonService _service = commonService();
+  final ApiConfig _apiConfig = ApiConfig();
 
   @override
   void initState() {
@@ -99,7 +101,7 @@ class _PanelInfoScreenState extends State<PanelInfoScreen> {
       });
 
       // Build the URL
-      final String url = '$_appUrl/api/v1/user/company/case/panel/info?&companyId=$_selectedCompanyId&caseId=$_caseId&panelId=$_panelId';
+      final String url = '$_appUrl${ApiConfig.casePanelInfo}?&companyId=$_selectedCompanyId&caseId=$_caseId&panelId=$_panelId';
 
       // Send the API request
       final response = await http.get(

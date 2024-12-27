@@ -120,47 +120,6 @@ class _PanelScreenState extends State<PanelScreen> {
     }
   }
 
-  // Helper method to assign colors based on the first letter of the name
-  Color _getLetterColor(String letter) {
-    final colors = [
-      Colors.red,
-      Colors.blue,
-      Colors.green,
-      Colors.yellow,
-      Colors.orange,
-      Colors.purple,
-      Colors.pink,
-      Colors.brown,
-      Colors.teal,
-      Colors.cyan,
-      Colors.indigo,
-      Colors.lime,
-      Colors.amber,
-      Colors.deepOrange,
-      Colors.lightBlue,
-      Colors.deepPurple,
-      Colors.lightGreen,
-      Colors.grey,
-      Colors.black,
-      Colors.white, // Use this with text color to avoid conflicts
-      Colors.blueGrey,
-      Colors.redAccent,
-      Colors.greenAccent,
-      Colors.yellowAccent,
-      Colors.purpleAccent,
-      Colors.orangeAccent,
-    ];
-
-    // Ensure the letter is uppercase
-    letter = letter.toUpperCase();
-
-    // Map A-Z to 0-25 using ASCII values
-    int index = letter.codeUnitAt(0) - 'A'.codeUnitAt(0);
-
-    // Return the corresponding color, default to black if not a letter
-    return (index >= 0 && index < colors.length) ? colors[index] : Colors.black;
-  }
-
   Future<void> _getCasesTasks(String domainUrl, [bool? showClosedTasks]) async {
     showClosedTasks = showClosedTasks == null ? false : showClosedTasks;
 
@@ -176,7 +135,7 @@ class _PanelScreenState extends State<PanelScreen> {
 
       if (casesTasksDetails.statusCode == 200) {
         final detailsData = json.decode(casesTasksDetails.body);
-        print(' details: $detailsData');
+
         if (detailsData['data']['panels'] != null) {
           final List<Map<String, dynamic>> newTaskData = []; // Extract and process tasks
 
@@ -184,12 +143,17 @@ class _PanelScreenState extends State<PanelScreen> {
             for (var task in panel['tasks']) {
               final assigneeName = task['assignee'] ?? ''; // Handle missing assignee
               final firstLetter = assigneeName.isNotEmpty ? assigneeName[0].toUpperCase() : '';
+              var taskColorCode;
+
+              if(taskStatusColorCodes.containsKey(task['taskStatus'])){
+                taskColorCode = taskStatusColorCodes[task['taskStatus']];
+              }
 
               newTaskData.add({
                 'task': task['name'],
                 'avatar': {
                   'text': firstLetter.isNotEmpty ? firstLetter : '?',
-                  'backgroundColor': Colors.blue,
+                  'backgroundColor': taskColorCode,
                 },
                 'panelId': panel['id'],
                 'companyId': _selectedCompanyId,
@@ -264,6 +228,23 @@ class _PanelScreenState extends State<PanelScreen> {
       });
     }
   }
+
+  Map<String, dynamic> taskStatusColorCodes = {
+    /* Task status: Ongoing */
+    '1': Colors.blueAccent,
+    /* Task status: Near due */
+    '2': Colors.pink,
+    /* Task status: Overdue */
+    '3': Colors.red,
+    /* Task status: Upcoming */
+    '4': Colors.green,
+    /* Task status: Pending */
+    '5': Colors.purple,
+    /* Task status: Submitted for approval */
+    '8': Colors.amber,
+    /* Task status: Closed */
+    '9': Colors.grey,
+  };
 
   @override
   void dispose() {

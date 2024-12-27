@@ -4,6 +4,7 @@ import 'package:flutter_tms/ui/widgets/custom_expansion_tile.dart' as customExpa
 import 'package:http/http.dart' as http;
 import 'package:flutter_tms/api/authService.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../api/apiConfig.dart';
 import 'common/commonService.dart';
 
 class CaseDetailsScreen extends StatefulWidget {
@@ -32,6 +33,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen> {
 
   final AuthService _authService = AuthService();
   final commonService _service = commonService();
+  final ApiConfig _apiConfig = ApiConfig();
 
   @override
   void initState() {
@@ -100,7 +102,7 @@ class _CaseDetailsScreenState extends State<CaseDetailsScreen> {
     });
     try {
       final String url =
-          '$domainUrl/api/v1/user/company/case/info?companyId=$_selectedCompanyId&caseId=$_caseId';
+          '$domainUrl${ApiConfig.caseInfo}?companyId=$_selectedCompanyId&caseId=$_caseId';
       final response = await http.get(
         Uri.parse(url),
         headers: {

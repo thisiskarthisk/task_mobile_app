@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_tms/ui/screen/cases.dart';
 import 'package:flutter_tms/ui/screen/dashboard.dart';
 import 'package:flutter_tms/ui/screen/favorites.dart';
@@ -9,7 +10,13 @@ import 'ui/screen/home.dart';  // Import HomeScreen
 import 'ui/screen/auth/splash_screen.dart';
 
 void main() {
-  runApp(Tms());
+  // runApp(Tms());
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp, // Lock to portrait mode
+  ]).then((_) {
+    runApp(Tms());
+  });
 }
 
 class Tms extends StatelessWidget {

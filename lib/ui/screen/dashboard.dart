@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_tms/ui/screen/panelService.dart';
 import 'package:flutter_tms/ui/screen/panelTaskInfo.dart';
+import 'package:flutter_tms/ui/screen/panel_info.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_tms/api/authService.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../api/apiConfig.dart';
 import 'common/commonService.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -25,6 +28,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   final AuthService _authService = AuthService();
   final commonService _service = commonService();
+  final ApiConfig _apiConfig = ApiConfig();
 
   @override
   void initState() {
@@ -84,7 +88,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> fetchDashBoardDetails(String domainUrl) async {
     try {
       final String url =
-          '$_appUrl/api/v1/user/company/dashboard/data?companyId=$_selectedCompanyId';
+          '$_appUrl${ApiConfig.dashboard}?companyId=$_selectedCompanyId';
 
       final response = await http.get(
         Uri.parse(url),
@@ -190,7 +194,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: Text(
                           '${day.day}',
                           style: TextStyle(
-                            fontSize: 20,
+                            fontSize: 13,
                             color: focusedDay == day ? Colors.blue : Colors.black,
                           ),
                         ),
@@ -236,7 +240,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           child: Text(
                             '${day.day}',
                             style: TextStyle(
-                              fontSize: 20,
+                              fontSize: 13,
                               color: Colors.white,
                             ),
                           ),
@@ -310,7 +314,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       shrinkWrap: true,
                       itemCount: _selectedEvents.length,
                       itemBuilder: (context, index) {
-                        final task = _selectedEvents[index];
+                        final task = {
+                          ..._selectedEvents[index], // Spread the original task
+                          'appUrl': _appUrl, // Add appUrl to the task
+                          'companyId': _selectedCompanyId, // Add companyId to the task
+                        };
+
+                        // final task = _selectedEvents[index];
                         return TaskCard(task: task);
                       },
                     ),
@@ -336,7 +346,9 @@ class TaskCard extends StatelessWidget {
     double screenWidth = MediaQuery.of(context).size.width;
 
     return GestureDetector(
-          onTap: () {
+      onTap: () {
+        print('task: $task');
+
         // Navigate to PanelDetailsScreen and pass the task object
         Navigator.push(
           context,

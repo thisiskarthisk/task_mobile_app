@@ -128,7 +128,7 @@ class _bottomBarState extends State<bottomBar> with SingleTickerProviderStateMix
               children: <Widget>[
                 DrawerHeader(
                   child: Text(
-                    'Projlujo',
+                    'Proflujo',
                     style: TextStyle(color: Colors.white, fontSize: fontSizeFactor * 1.2),
                   ),
                   decoration: BoxDecoration(color: Colors.blue),

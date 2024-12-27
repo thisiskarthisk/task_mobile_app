@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter_tms/api/authService.dart';
+import '../../api/apiConfig.dart';
 import './common/commonService.dart';
 import 'case_details.dart';
 
@@ -20,6 +21,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   int? _selectedCompanyId;
   final AuthService _authService = AuthService();
   final commonService _service = commonService();
+  final ApiConfig _apiConfig = ApiConfig();
 
   @override
   void initState() {
@@ -60,7 +62,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     });
 
     try {
-      final String url = '$domainUrl/api/v1/user/company/cases?companyId=$_selectedCompanyId';
+      final String url = '$domainUrl${ApiConfig.companyCases}?companyId=$_selectedCompanyId';
       print('Fetching cases from URL: $url');
 
       final response = await http.get(

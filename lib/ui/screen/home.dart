@@ -275,10 +275,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     List<dynamic> companies = companyDetails?['data']['companies'] ?? [];
 
-    print('companies: $companies');
-    print('_showCompanyDetails: $_showCompanyDetails');
-    print('_selectedApp: $_selectedApp');
-
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
@@ -322,7 +318,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         radius: screenWidth * 0.12,
                         backgroundColor: Colors.white,
                         child: Text(
-                          // currUserName.substring(0, 1).toUpperCase(),
                             '${widget.userName.substring(0, 1).toUpperCase()}',
                           style: TextStyle(
                             color: Theme.of(context).primaryColorDark,
