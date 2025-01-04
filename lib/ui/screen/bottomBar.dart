@@ -4,7 +4,6 @@ import 'package:flutter_tms/ui/screen/cases.dart';
 import 'package:flutter_tms/ui/screen/dashboard.dart';
 import 'package:flutter_tms/ui/screen/favorites.dart';
 import 'package:flutter_tms/ui/screen/home.dart';
-import 'package:flutter_tms/ui/screen/home.dart';
 import 'package:flutter_tms/ui/screen/notifications.dart';
 import 'package:flutter_tms/api/authService.dart';
 

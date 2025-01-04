@@ -104,6 +104,7 @@ class panelService {
         },
         body: json.encode(data),
       );
+      print('taskInfo: updateTaskInfo ()-> ${taskInfo.body}');
 
       if (taskInfo.statusCode == 200) {
         return json.decode(taskInfo.body);
@@ -251,9 +252,6 @@ class panelService {
     final String url =
         '$domainUrl${ApiConfig.taskAdditionalDetail}?companyId=$companyId&caseId=$caseId&panelId=$panelId&taskId=$taskId&type=$type&get=$additionalDetailName$additionalURLParams';
 
-    print('fetchTaskAdditionalDetails()');
-    print('url: $url');
-
     final response = await http.get(
       Uri.parse(url),
       headers: {
@@ -266,7 +264,6 @@ class panelService {
     if (response.statusCode == 200) {
       try {
         final data = json.decode(response.body);
-        print('data: fetchTaskAdditionalDetails()-> $data');
         return FetchTaskAdditionalDetailsResponse.fromJson(data);
       } catch (e) {
         throw Exception('Error parsing response: $e');
@@ -327,6 +324,50 @@ class panelService {
     });
 
     return _attachmentsDir.path;
+  }
+
+  Future<dynamic> closeTask(String domainUrl, int companyId, int caseId, int panelId, int taskId) async {
+    final idt = await _authService.getIdt();
+    Map<String, dynamic> data = {};
+
+    final url = domainUrl + '${ApiConfig.closeTask}';
+
+    // Set additional request parameters
+    data['companyId'] = '$companyId';
+    data['caseId'] = caseId;
+    data['panelId'] = panelId;
+    data['taskId'] = taskId;
+
+    var headers = {
+      'Authorization' : 'Bearer $idt',
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'};
+
+    final response = await http.post(Uri.parse(url), body: jsonEncode(data), headers: headers);
+
+    return response;
+  }
+
+  Future<dynamic> reSubmitTask(String domainUrl, int companyId, int caseId, int panelId, int taskId) async {
+    final idt = await _authService.getIdt();
+    Map<String, dynamic> data = {};
+
+    final url = domainUrl + '${ApiConfig.reSubmitTask}';
+
+    // Set additional request parameters
+    data['companyId'] = '$companyId';
+    data['caseId'] = caseId;
+    data['panelId'] = panelId;
+    data['taskId'] = taskId;
+
+    var headers = {
+      'Authorization' : 'Bearer $idt',
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'};
+
+    final response = await http.post(Uri.parse(url), body: jsonEncode(data), headers: headers);
+
+    return response;
   }
 }
 
@@ -415,6 +456,23 @@ class DocumentHistory {
   }
 }
 
+class ApprovalHistory {
+  final String submittedDate, proposer, approvalDate, approver, comments, status;
+
+  ApprovalHistory({required this.submittedDate, required this.proposer, required this.approvalDate, required this.approver, required this.comments, required this.status});
+
+  factory ApprovalHistory.fromJson(Map<String, dynamic> json) {
+    return ApprovalHistory(
+      submittedDate: json['submittedDate'] ?? '-',
+      proposer: json['proposer'] ?? '-',
+      approvalDate: json['approvalDate'] ?? '-',
+      approver: json['approver'] ?? '-',
+      comments: json['comments'] ?? '-',
+      status: json['status'] ?? '-',
+    );
+  }
+}
+
 // Define the ChecklistItem model
 class ChecklistItem {
   bool isChecked;
@@ -490,9 +548,9 @@ class FetchTaskAdditionalDetailsResponse {
         errorMessage: errorMessage,
         documentHistory: documentHistory,
       );
-    } catch (e, stack) {
+    } catch (e, stacktrace) {
       print('Error in FetchTaskAdditionalDetailsResponse: $e');
-      print(stack);
+      print(stacktrace);
       return FetchTaskAdditionalDetailsResponse(
         success: false,
         errorMessage: 'Error parsing response: $e',

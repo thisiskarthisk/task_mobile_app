@@ -19,6 +19,8 @@ class ApiConfig {
   static const String caseInfo = "/api/v1/user/company/case/info";
   static const String dashboard = "/api/v1/user/company/dashboard/data";
   static const String taskAdditionalDetail = "/api/v1/user/company/case/panel/task/additional-details";
+  static const String closeTask = "/api/v1/user/company/case/panel/task/close";
+  static const String reSubmitTask = "/api/v1/user/company/case/panel/task/resubmit";
   // static const String additionalDetails = "/api/v1/user/company/case/panel/task/add";
 
 }

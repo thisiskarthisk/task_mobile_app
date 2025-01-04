@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:intl/intl.dart';
@@ -31,15 +32,12 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
   final PanelScreen _panelScreen = PanelScreen(task: {},);
   final AuthService _authService = AuthService();
 
-  final TextEditingController _messageController = TextEditingController();
-  final TextEditingController _taskNameController = TextEditingController();
+  final TextEditingController _messageController = TextEditingController(), commentsController = TextEditingController(), _taskNameController = TextEditingController();
   TextEditingController? _newCheckListGroupNameController;
 
   // Calendar Info Controllers
-  final TextEditingController _startDateController = TextEditingController();
-  final TextEditingController _endDateController = TextEditingController();
-  late TextEditingController _startTimeController = TextEditingController();
-  late TextEditingController _endTimeController = TextEditingController();
+  final TextEditingController _startDateController = TextEditingController(), _endDateController = TextEditingController();
+  late TextEditingController _startTimeController = TextEditingController(), _endTimeController = TextEditingController();
 
   just_audio.AudioPlayer player = just_audio.AudioPlayer();
 
@@ -49,24 +47,18 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
   String? appUrl, description = '', startDueDate = '', selectedPriority, selectedTaskCompletionType, selectedReminderUnit,
       selectedApprovalRequired, taskCompletionTypeManual, approvalRequiredYes, autoStartTaskValue, nameValue, name2Value,
       autoStartTask, currentEditingField, reminderDuration, TaskApprover, selectedTaskApprovalType, selectedTaskCompletionAuto,
-      selectedLinkedTask, _recordedAudioFilePath, _currentAudioUrl, selectedNextTask, _fileName, _filePath, taskInfoTitleName;
+      selectedLinkedTask, _recordedAudioFilePath, _currentAudioUrl, selectedNextTask, _fileName, _filePath, taskInfoTitleName, loginUserName;
 
-  // State to track unsaved changes
-  bool hasUnsavedChanges = false;
-  bool _isReminderFieldFocused = false;
-  bool _isPaused = false;
-  bool _isRecording = false;
-  bool _isPlaying = false;
-  bool isHistoryVisible = true;
+  bool hasUnsavedChanges = false, _isApprover = false, _isReminderFieldFocused = false, _isCommentsFieldFocused = false, isLoadingShown = false, _isPaused = false, _isRecording = false, _isPlaying = false, isHistoryVisible = true;
 
-  FocusNode _reminderFocusNode = FocusNode();
-  FocusNode editTaskNameFocusNode = FocusNode();
+  FocusNode _reminderFocusNode = FocusNode(), editTaskNameFocusNode = FocusNode(), commentsNameFocusNode = FocusNode();
   FlutterSoundPlayer? _player = FlutterSoundPlayer();
   FlutterSoundRecorder? _recorder;
   Timer? _recordingTimer;
   int _recordingSeconds = 0;
 
   var taskDetails;
+  var sApprovers;
   List<dynamic> members = [];
   Map<String, dynamic>? taskCodelists;
   Map<String, dynamic> currEditingFieldValue = {};
@@ -77,6 +69,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
 
   // File Attachment
   List<Attachment> _attachments = [];
+  List<ApprovalHistory> _approvalHistory = [];
   Map<String, String>? _selectedFile;
   Timer? _keyboardTimer;
   File? newAttachFile;
@@ -84,6 +77,9 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
   PlatformFile? newAttachingFile;  // Declare as nullable to safely check if it's initialized
   Map<String, bool> historyVisibility = {};
   bool refreshLayout = false;
+  List<String> selectedMembers = [];
+
+  BuildContext? get pageContext => null;
 
   @override
   void initState() {
@@ -96,6 +92,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     _taskNameController.text = widget.task['task'] ?? taskInfoTitleName ?? 'Task Name';  // Initialize task name
     _setupKeyboardAutoClose();
     _initializeRecorder();
+    _isCurrentUser();
     responseData = {};
   }
 
@@ -254,14 +251,33 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
 
   void _setupKeyboardAutoClose() {
     _keyboardTimer?.cancel();
-    _keyboardTimer = Timer(Duration(seconds: 30), () {
+    _keyboardTimer = Timer(Duration(seconds: 10), () {
       if (_reminderFocusNode.hasFocus) {
         _reminderFocusNode.unfocus();
         setState(() {
           _isReminderFieldFocused = false;
         });
       }
+      if (commentsNameFocusNode.hasFocus) {
+        commentsNameFocusNode.unfocus();
+        setState(() {
+          _isCommentsFieldFocused = false;
+        });
+      }
     });
+  }
+
+  void _onApproveButtonClicked(String comment) {
+    // Logic for Approve action
+    print("Approved with comment: $comment");
+    _showApproveDialog(comment);
+  }
+
+  _hideLoadingDialog() {
+    if(isLoadingShown) {
+      Navigator.pop(pageContext!);
+      isLoadingShown = false;
+    }
   }
 
   @override
@@ -296,6 +312,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
       taskDetails = taskInfo['data']['taskInfo'];
       var taskCodeLists = taskInfo['data']['codelists'];
       var checklistData = taskInfo['data']['checklist'] ?? [];
+      var approvalHistory = taskInfo['data']['approvalHistory'] ?? [];
 
       if (!mounted) return;
 
@@ -305,6 +322,14 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
         _activities = (taskInfo['data']['activities'] as List<dynamic>)
             .map((activity) => Activity.fromJson(activity))
             .toList();
+        if (approvalHistory is List) {
+          _approvalHistory = approvalHistory
+              .map((entry) => ApprovalHistory.fromJson(entry))
+              .toList();
+          _checkApproverStatus();
+        } else {
+          _approvalHistory = [];
+        }
 
         _attachments = (taskInfo['data']['attachments'] as List<dynamic>)
             .map((attachments) => Attachment.fromJson(attachments))
@@ -321,15 +346,25 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
         selectedReminderUnit = taskCodeLists['reminderDurationUnit'][taskDetails['reminderDurationUnit'].toString()];
         reminderDuration = taskDetails['reminderDuration']?.toString() ?? '';
         selectedTaskCompletionType = taskCodeLists['taskCompletionType'][taskDetails['taskCompletionType'].toString()];
-        selectedApprovalRequired = taskCodeLists['approvalRequired'][taskDetails['approvalRequired'].toString()];
 
         taskCompletionTypeManual = taskCodeLists['taskCompletionType'][taskDetails['taskCompletionTypeManual'].toString()];
         selectedTaskApprovalType = (taskDetails['approvalType'] == null || taskDetails['approvalType'].toString().isEmpty) ? '': taskDetails['approvalType'].toString();
+        selectedApprovalRequired = (taskDetails['approvalRequired'] == null || taskDetails['approvalRequired'].toString().isEmpty) ? '': taskDetails['approvalRequired'].toString();
+        approvalRequiredYes = (taskDetails['approvalRequired'] == null || taskDetails['approvalRequiredYes'].toString().isEmpty) ? '': taskDetails['approvalRequiredYes'].toString();
+
         selectedTaskCompletionAuto = (taskDetails['closeTaskAutomaticallyAt'] == null || taskDetails['closeTaskAutomaticallyAt'].toString().isEmpty) ? '' : taskDetails['closeTaskAutomaticallyAt'].toString();
         selectedLinkedTask = (taskDetails['linkedTask'] == null || taskDetails['linkedTask'].toString().isEmpty) ? '' : taskDetails['linkedTask'].toString();
         selectedNextTask = (taskDetails['nextTask'] == null || taskDetails['nextTask'].toString().isEmpty) ? '' : taskDetails['nextTask'].toString();
         TaskAssignee = taskDetails['assignee'];
-        TaskApprover = taskDetails['approver'].toString();
+
+        if (taskDetails.containsKey('approver') && taskDetails['approver'] is String) {
+          List<String> sApprovers = taskDetails['approver'].split(',').toList();
+          print('Approvers: $sApprovers');
+          selectedMembers = sApprovers;
+        } else {
+          print('Approver key not found or not a string');
+        }
+
         checklist = List<ChecklistItem>.from(checklistData.map((item) => ChecklistItem.fromJson(item)));
 
         taskCodelists = taskCodeLists;
@@ -390,6 +425,8 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
           case 'startDueTime':
             String startDueDate = _startDateController.text.trim();
             String startDueTime = _startTimeController.text.trim();
+
+            print('startDueTime: $startDueTime');
 
             if (startDueTime.isNotEmpty) {
               String combinedStartDateTime = "$startDueDate $startDueTime";
@@ -463,8 +500,6 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
           case 'nextTask':
             String nextTask = _getCurrEditingValue('nextTask');
 
-            print('nextTask: $nextTask');
-
             data = {
               'fieldName': 'nextTask',
               'fieldValue': nextTask != null ? nextTask : ''
@@ -472,10 +507,25 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
             break;
           case 'closeTaskAt':
             String closeTaskAt = _getCurrEditingValue('closeTaskAt');
-
+            print('closeTaskAt: selectedTaskCompletionAuto: $closeTaskAt');
             data = {
               'fieldName': 'closeTaskAt',
               'fieldValue': closeTaskAt != null ? closeTaskAt : ''
+            };
+            break;
+          case 'approval':
+            String approvalComment = _getCurrEditingValue('approvalComment');
+            data = {
+              'fieldName': 'approveTask',
+              'fieldValue': approvalComment != null ? approvalComment : ''
+            };
+            break;
+          case 'reject':
+            String approvalComment = _getCurrEditingValue('approvalComment');
+
+            data = {
+              'fieldName': 'rejectTask',
+              'fieldValue': approvalComment != null ? approvalComment : ''
             };
             break;
           case 'linkedTask':
@@ -493,11 +543,10 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
             };
             break;
           case 'approver':
-            var approver = _getCurrEditingValue('approver');
-
+            List<int> approver = selectedMembers.map((e) => int.parse(e)).toList();
+            // var approver = _getCurrEditingValue('approver');
+            print('approver: $approver');
             var approvalType = selectedTaskApprovalType;
-            print('approver: $approvalType');
-
             data = {
               'fieldName': 'approver',
               'fieldValue': {
@@ -644,6 +693,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
           } else {
             response = await _panelService.updateTaskInfo(
                 appUrl!, companyId!, caseId!, panelId!, taskId!, data);
+            print('response: ${response}');
             isSaved = response['success'];
           }
 
@@ -657,11 +707,11 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
             responseData = response['data'] is Map<String, dynamic>
                 ? response['data'] as Map<String, dynamic>
                 : null;
+            print('responseData: $responseData');
 
             switch (currentEditingField) {
               case 'taskName':
                 taskInfoTitleName = _getCurrEditingValue('taskName');
-                print('taskinfoname: $taskInfoTitleName');
                 _taskNameController.text = taskInfoTitleName!;
                 break;
               case 'comment':
@@ -676,6 +726,130 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     } catch (e) {
       throw Exception('Error adding task: $e');
     }
+  }
+
+  _closeTask() async {
+    String messageToShow = '';
+    bool isTaskClosed = false;
+
+    if (appUrl == null || companyId == null || caseId == null || panelId == null || taskId == null) {
+      return;
+    }
+
+    try {
+      final response = await panelService().closeTask(appUrl!, companyId!, caseId!, panelId!, taskId!);
+      final Map<String, dynamic> responseData = json.decode(response.body);
+
+      print('responseData: $responseData');
+
+      isTaskClosed = responseData['success'];
+      messageToShow = responseData['message'];
+
+      await Future.delayed(Duration(milliseconds: 1000));
+    } catch (e1, e2) {
+      print('Close task error: ${e1.toString()}');
+      print(e2.toString());
+
+      messageToShow = 'Some error has occurred. Unable to close task';
+    }
+
+    if(isTaskClosed) {
+      // Go to previous screen
+      // Navigator.of(pageContext).pop();
+      Navigator.of(context).pop();
+    } else {
+      // Dialogs().alert(messageToShow, pageContext, () {
+      //   Navigator.of(pageContext).pop();
+      // });
+      Navigator.of(context).pop();
+    }
+  }
+
+  _reSubmitTask() async {
+    String messageToShow = '';
+    bool isTaskClosed = false;
+
+    if (appUrl == null || companyId == null || caseId == null || panelId == null || taskId == null) {
+      return;
+    }
+
+    try {
+      dynamic response = await panelService().reSubmitTask(appUrl!, companyId!, caseId!, panelId!, taskId!);
+
+      isTaskClosed = response['success'];
+      messageToShow = response['message'];
+
+      await Future.delayed(Duration(milliseconds: 1000));
+    } catch (e1, e2) {
+      print('Close task error: ${e1.toString()}');
+      print(e2.toString());
+
+      messageToShow = 'Some error has occurred. Unable to Resubmit the task';
+    }
+    if(isTaskClosed) {
+      // Go to previous screen
+      Navigator.of(context).pop(messageToShow);
+    }
+  }
+
+  void _checkApproverStatus() async {
+    final isApprover = await _isCurrentUserApprover();
+    setState(() {
+      _isApprover = isApprover;
+    });
+  }
+
+  // Helper methods to check the current user's role and status
+  Future<bool> _isCurrentUserApprover() async {
+    final userData = await _authService.getUserData();
+
+    if (userData == null || userData['userName'] == null) {
+      print("User data or username is null.");
+      return false;
+    }
+
+    final currentUserName = userData['userName']?.trim(); // Remove any extra spaces
+    if (_approvalHistory.isEmpty) {
+      return false;
+    }
+    // Normalize comparison to be case-insensitive and ignore leading/trailing spaces
+    return _approvalHistory.any((entry) =>
+    entry.approver?.trim().toLowerCase() == currentUserName?.toLowerCase());
+  }
+
+  bool _isApprovalPending() {
+    if (_approvalHistory.isEmpty) {
+      return false; // No entries, so no pending approval
+    }
+    // // Get the last entry in the approval history
+    // final lastApprovalEntry = _approvalHistory.last;
+    // // Check if the status of the last entry is 'Pending Approval'
+    // return lastApprovalEntry.status == 'Pending Approval';
+
+    // Check if any entry in the approval history has the status 'Pending Approval'
+    return _approvalHistory.any((entry) => entry.status == 'Pending Approval');
+
+  }
+
+  bool _isApprovalRejected() {
+    if (_approvalHistory.isEmpty) {
+      return false; // No entries, so no Rejected
+    }
+    // Get the last entry in the approval history
+    final lastApprovalEntry = _approvalHistory.last;
+    // Check if the status of the last entry is 'Rejected'
+    return lastApprovalEntry.status == 'Rejected';
+  }
+
+  _isCurrentUser() async {
+    final userData = await _authService.getUserData();
+
+    if (userData.isEmpty || userData['userName'] == null) {
+      print("User data or username is null.");
+      return false;
+    }
+
+    loginUserName = userData['userName']?.trim();
   }
 
   _openFileInNativeApp(String filePath, [String? fileType]) async {
@@ -807,89 +981,51 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
 
   // Function to open Task Options Menu
   void _openTaskOptionsMenu() async {
+    List<List<dynamic>> menuOptions = [];
+
+    if (_isApprovalRejected() && _approvalHistory.isNotEmpty) {
+      menuOptions.add([2, Icons.checklist, 'Add Checklist Group']);
+      menuOptions.add([6, Icons.refresh, 'Resubmit']);
+    } else if (_isApprovalPending() && _approvalHistory.isNotEmpty){
+      menuOptions.add([7, Icons.supervised_user_circle, 'Members']);
+    } else {
+      menuOptions.add([1, Icons.edit, 'Change Task Name']);
+      menuOptions.add([2, Icons.checklist, 'Add Checklist Group']);
+      menuOptions.add([3, Icons.attach_file, 'Attach File']);
+      menuOptions.add([4, Icons.link, 'Attach Link']);
+      menuOptions.add([5, Icons.close, 'Close Task']);
+      menuOptions.add([7, Icons.supervised_user_circle, 'Members']);
+    }
+
     final result = await showMenu<int>(
       context: context,
       position: RelativeRect.fromLTRB(
-        MediaQuery.of(context).size.width - 48, // Right side of the screen
-        kToolbarHeight, // Below the AppBar
-        0.0, // Left
-        0.0, // Top
+        MediaQuery.of(context).size.width - 48, kToolbarHeight, 0.0, 0.0,
       ),
       items: [
-        PopupMenuItem<int>(
-          value: 1,
-          child: Row(
-            children: [
-              Icon(Icons.edit, color: Colors.black), // Icon for "Change Task Name"
-              SizedBox(width: 8),
-              Text('Change Task Name'),
-            ],
+        for (var option in menuOptions)
+          PopupMenuItem<int>(
+            value: option[0] as int,
+            child: Row(
+              children: [
+                Icon(option[1] as IconData?, color: Colors.black),
+                SizedBox(width: 8),
+                Text('${option[2]}'),
+              ],
+            ),
           ),
-        ),
-        PopupMenuItem<int>(
-          value: 2,
-          child: Row(
-            children: [
-              Icon(Icons.checklist,color: Colors.black),
-              SizedBox(width: 8),
-              Text("Add Checklist Group")
-            ],
-          ),
-        ),
-        PopupMenuItem<int>(
-          value: 3,
-          child: Row(
-            children: [
-              Icon(Icons.attach_file,color: Colors.black),
-              SizedBox(width: 8),
-              Text("Attach File"),
-            ],
-          ),
-        ),
-        PopupMenuItem<int>(
-          value: 4,
-          child: Row(
-            children: [
-              Icon(Icons.link,color: Colors.black),
-              SizedBox(width: 8),
-              Text("Attach Link")
-            ],
-          ),
-        ),
-        PopupMenuItem<int>(
-          value: 5,
-          child: Row(
-            children: [
-              Icon(Icons.close,color: Colors.black),
-              SizedBox(width: 8),
-              Text("Close Task")
-            ],
-          ),
-        ),
       ],
       elevation: 8.0,
     );
 
-    // Handling the selected option
     if (result != null) {
       switch (result) {
-        case 1:
-          _showChangeTaskNameDialog();
-          break;
-        case 2:
-          _showAddChecklistGroupDialog();
-          break;
-        case 3:
-          _showAttachFileDialog();
-          break;
-        case 4:
-          _showAttachLinkDialog();
-          break;
-        case 5:
-          _showCloseTaskDialog();
-          break;
-        default:
-          break;
+        case 1: _showChangeTaskNameDialog(); break;
+        case 2: _showAddChecklistGroupDialog(); break;
+        case 3: _showAttachFileDialog(); break;
+        case 4: _showAttachLinkDialog(); break;
+        case 5: _showCloseTaskDialog(); break;
+        case 6: _showReSubmitTaskWarning(); break;
       }
     }
   }
@@ -1152,6 +1288,48 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     );
   }
 
+  void _showReSubmitTaskWarning() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Resubmit Task'),
+          content:Row(
+            children: [
+              Icon(Icons.warning,color: Colors.yellow[700],size: 20,),
+              SizedBox(width: 10), // Space between icon and text
+              Expanded( // Wrap the text with an Expanded widget to allow it to take up remaining space
+                child: Text(
+                  'Are you sure you want to submit the task again for approval?',
+                  style: TextStyle(
+                    fontSize: 11, // Adjust font size
+                    color: Colors.black87, // Text color
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Yes'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                _reSubmitTask();
+              },
+            ),
+            TextButton(
+              child: Text('No'),
+              onPressed: () {
+                // Close task logic here
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   // Dialog to close task
   void _showCloseTaskDialog() {
     showDialog(
@@ -1179,6 +1357,99 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
               child: Text('Yes'),
               onPressed: () {
                 Navigator.of(context).pop();
+                _closeTask();
+              },
+            ),
+            TextButton(
+              child: Text('No'),
+              onPressed: () {
+                // Close task logic here
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showApproveDialog(String comment) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Confirm Task Approval', style: TextStyle(fontSize: 20),),
+          content:Row(
+            children: [
+              Icon(Icons.warning,color: Colors.yellow[700],size: 20,),
+              SizedBox(width: 10), // Space between icon and text
+              Expanded( // Wrap the text with an Expanded widget to allow it to take up remaining space
+                child: Text(
+                  'Are you sure you want to approve this task?',
+                  style: TextStyle(
+                    fontSize: 11, // Adjust font size
+                    color: Colors.black87, // Text color
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Yes'),
+              onPressed: () {
+                currentEditingField = 'approval';
+                _putCurrEditingValue('approvalComment', comment);
+                _onBtnSaveTaskInfoClicked();
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text('No'),
+              onPressed: () {
+                // Close task logic here
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showApprovalRejectDialog() {
+    print('Reject dialog opened');
+    FocusScope.of(context).unfocus();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Confirm Task Reject', style: TextStyle(fontSize: 20)),
+          content:Row(
+            children: [
+              Icon(Icons.warning,color: Colors.yellow[700],size: 20,),
+              SizedBox(width: 10), // Space between icon and text
+              Expanded( // Wrap the text with an Expanded widget to allow it to take up remaining space
+                child: Text(
+                  'Are you sure you want to reject this task?',
+                  style: TextStyle(
+                    fontSize: 11, // Adjust font size
+                    color: Colors.black87, // Text color
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Yes'),
+              onPressed: () {
+                var comment = commentsController.text;
+                currentEditingField = 'reject';
+                _putCurrEditingValue('approvalComment', comment);
+                _onBtnSaveTaskInfoClicked();
+                Navigator.of(context).pop();
               },
             ),
             TextButton(
@@ -1205,8 +1476,6 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
           appUrl!, companyId!, caseId!, panelId!, taskId!, 1,
           'documentHistory','documentId=${_attachments[_attachmentIndex].id}',
         );
-
-        print("response${response.documentHistory}");
 
         if (response.success) {
           attachment.documentHistoryList = response.documentHistory.cast<DocumentHistory>();
@@ -1256,7 +1525,6 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
     final task = widget.task;
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
-    final isSmallScreen = screenWidth < 600; // Example of determining small screen
 
     return Scaffold(
       backgroundColor: Colors.blue,
@@ -1374,7 +1642,6 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                   contentWidget: buildCalendarInfoContent(),
                 ),
 
-
                 // Reminder Section
                 buildExpandableSection(
                   title: 'Reminder',
@@ -1390,13 +1657,20 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                   contentWidget: buildTaskCompletionSection(),
                 ),
 
+                // Approval History
+                buildExpandableSection(
+                  title: 'Approval History',
+                  icon: Icons.history,
+                  // content: task['completionStatus'] ?? 'No status available.',
+                  contentWidget: buildApprovalHistory(),
+                ),
+
                 // Checklist Section
                 buildExpandableSection(
                   title: 'Checklist',
                   icon: Icons.checklist,
                   contentWidget: buildChecklistSection(),
                 ),
-
 
                 // Attachments Section
                 buildExpandableSection(
@@ -1526,7 +1800,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                           Icons.calendar_today, color: Colors.blue),
                       border: UnderlineInputBorder(),
                     ),
-                    onTap: () => _selectDate(_startDateController).then(
+                    onTap: (taskDetails != null && taskDetails['taskStatus'] == "8") ? null : () => _selectDate(_startDateController).then(
                           (_) => _onFieldValueChange('startDueDate', _startDateController.text),
                     ),
                   ),
@@ -1552,7 +1826,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                       suffixIcon: Icon(Icons.access_time, color: Colors.blue),
                       border: UnderlineInputBorder(),
                     ),
-                    onTap: () => _selectTime(_startTimeController).then(
+                    onTap: (taskDetails != null && taskDetails['taskStatus'] == "8") ? null : () => _selectTime(_startTimeController).then(
                           (_) => _onFieldValueChange('startDueTime', _startTimeController.text),
                     ),
                   ),
@@ -1609,11 +1883,8 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                       suffixIcon: Icon(Icons.access_time, color: Colors.blue),
                       border: UnderlineInputBorder(),
                     ),
-                    onTap: () async {
-                      await _selectTime(_endTimeController);
-                      print('_endTimeController: $_endTimeController');
-                      // _onFieldValueChange('endDueTime', _endTimeController.text);
-                    },
+                    onTap: (taskDetails != null && taskDetails['taskStatus'] == "8") ? null : () => _selectTime(_endTimeController).then(
+                            (_) => _onFieldValueChange('endDueTime', _endTimeController.text)),
                   ),
                 ],
               ),
@@ -1767,8 +2038,35 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
 
     Map<String, String> taskCompletionType = taskCodelists!['taskCompletionType'].cast<String, String>();
     Map<String, String> taskApprovalRequired = taskCodelists!['approvalRequired'].cast<String, String>();
+    Map<String, String> taskApprovalType = taskCodelists!['approvalTypes'].cast<String, String>();
     Map<String, String> taskCompletionAuto = taskCodelists!['taskCompletionAuto'].cast<String, String>();
-    Map<String, String> linkedTasks = taskCodelists!['linkedTasks'].cast<String, String>();
+    // Map<String, String> linkedTasks = taskCodelists!['linkedTasks'].cast<String, String>();
+    Map<String, String> linkedTasks = {};
+
+    print('taskCodelists: ${taskCodelists}');
+
+    if (taskCodelists != null && taskCodelists!['linkedTasks'] != null) {
+      var rawLinkedTasks = taskCodelists!['linkedTasks'];
+      if (rawLinkedTasks is Map) {
+        // If it's already a Map
+        linkedTasks = Map<String, String>.from(rawLinkedTasks);
+      } else if (rawLinkedTasks is List) {
+        // If it's a List, convert it to a Map
+        for (var item in rawLinkedTasks) {
+          if (item is Map && item.containsKey('key') && item.containsKey('value')) {
+            linkedTasks[item['key'].toString()] = item['value'].toString();
+          } else {
+            print("Invalid item in linkedTasks list: $item");
+          }
+        }
+      } else {
+        print("Error: linkedTasks is of unexpected type: ${rawLinkedTasks.runtimeType}");
+      }
+    } else {
+      print("taskCodelists or linkedTasks is null");
+    }
+
+
     var autoStartTask = taskCodelists?['autoStartTasks'];
 
     if (autoStartTask != null && autoStartTask is Map && autoStartTask.isNotEmpty) {
@@ -1811,7 +2109,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                             Radio<int>(
                               value: value,
                               groupValue: completionTypeValue,
-                              onChanged: (int? newValue) {
+                              onChanged: taskDetails['taskStatus'] == "8" ? null : (int? newValue) {
                                 setState(() {
                                   completionTypeValue = newValue;
                                   currentEditingField = 'taskCompletionType';
@@ -1853,7 +2151,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                               child: Text(label),
                             );
                           }).toList(),
-                          onChanged: (String? newValue) {
+                          onChanged: taskDetails['taskStatus'] == "8" ? null : (String? newValue) {
                             setState(() {
                               selectedTaskCompletionAuto = newValue;
 
@@ -1872,6 +2170,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
             ],
           ),
           SizedBox(height: 20),
+
 
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1896,8 +2195,45 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                           children: [
                             Radio<String>(
                               value: value,
-                              groupValue: selectedTaskApprovalType,
-                              onChanged: (String? newValue) {
+                              groupValue: selectedApprovalRequired != null ? selectedApprovalRequired : approvalRequiredYes,
+                              onChanged: taskDetails['taskStatus'] == "8" ? null : (String? newValue) {
+                                setState(() {
+                                  selectedApprovalRequired = newValue != null ? newValue.toString() : null;
+                                  // currentEditingField = 'approvalType';
+                                  // _onBtnSaveTaskInfoClicked();
+                                });
+                              },
+                            ),
+                            Text(label),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                flex: 1,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Approval Type',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    SizedBox(height: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: taskApprovalType.entries.map((entry) {
+                        String value = entry.key;
+                        String label = entry.value;
+
+                        return Row(
+                          children: [
+                            Radio<String>(
+                              value: value,
+                              groupValue: selectedTaskApprovalType != null ? selectedTaskApprovalType : '2',
+                              onChanged: taskDetails['taskStatus'] == "8" ? null : (String? newValue) {
                                 setState(() {
                                   selectedTaskApprovalType = newValue != null ? newValue.toString() : null;
                                   currentEditingField = 'approvalType';
@@ -1913,7 +2249,13 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                   ],
                 ),
               ),
+            ],
+          ),
+          SizedBox(height: 10),
 
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               /*Expanded(
                 flex: 1,
                 child: Column(
@@ -1939,7 +2281,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                 ),
               ),*/
 
-              if (selectedTaskApprovalType != null && selectedTaskApprovalType == '1')
+              if (selectedApprovalRequired != null && selectedApprovalRequired == '1')
                 Expanded(
                   flex: 1,
                   child: Column(
@@ -1951,26 +2293,42 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                       ),
                       SizedBox(height: 0),
                       if (members.isNotEmpty)
-                        DropdownButton<String>(
-                          value: members.any((member) => member['id'].toString() == TaskApprover)
-                              ? TaskApprover
-                              : null,
-                          items: members.map<DropdownMenuItem<String>>((member) {
-                            return DropdownMenuItem<String>(
-                              value: member['id']?.toString(),
-                              child: Text(member['name'] ?? 'Unknown'),
-                            );
-                          }).toList(),
-                          onChanged: (String? newValue) {
-                            setState(() {
-                              TaskApprover = newValue;
-                              currentEditingField = 'approver';
-                              _putCurrEditingValue('approver', newValue);
-                              _onBtnSaveTaskInfoClicked();
-                            });
-                          },
-                          hint: Text('Select a Member'),
-                          isExpanded: true,
+                        DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: null,
+                            items: members
+                                .where((member) => member['name'] != loginUserName)
+                                .map<DropdownMenuItem<String>>((member) {
+                              return DropdownMenuItem<String>(
+                                value: member['id']?.toString(),
+                                child: Text(member['name'] ?? 'Unknown'),
+                              );
+                            }).toList(),
+                            onChanged: (String? selectedValue) {
+                              setState(() {
+                                if (selectedMembers.contains(selectedValue)) {
+                                  selectedMembers.remove(selectedValue); // Deselect if already selected
+                                } else {
+                                  selectedMembers.add(selectedValue!); // Select if not selected
+                                }
+
+                                currentEditingField = 'approver';
+                                _putCurrEditingValue('approver', selectedMembers);
+                                _onBtnSaveTaskInfoClicked();
+                              });
+                            },
+                            hint: Text(
+                              selectedMembers.isEmpty
+                                  ? 'Select Approvers'
+                                  : selectedMembers
+                                  .map((id) =>
+                              members.firstWhere((member) => member['id'].toString() == id)['name'])
+                                  .join(', '),
+                              maxLines: 100,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            isExpanded: true,
+                          ),
                         )
                       else
                         Text('No approvers available'),
@@ -1984,7 +2342,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (selectedTaskApprovalType != null && selectedTaskApprovalType == '1' && (selectedTaskCompletionAuto == '2' || selectedTaskCompletionAuto == '3'))
+              if (selectedApprovalRequired != null && selectedApprovalRequired == '1' && (selectedTaskCompletionAuto == '2' || selectedTaskCompletionAuto == '3') && selectedTaskCompletionType != 'Manual')
                 Expanded(
                   flex: 1,
                   child: Column(
@@ -2006,7 +2364,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                               child: Text(label),
                             );
                           }).toList(),
-                          onChanged: (String? newValue) {
+                          onChanged: taskDetails['taskStatus'] == "8" ? null : (String? newValue) {
                             setState(() {
                               selectedLinkedTask = newValue;
 
@@ -2023,23 +2381,23 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                 ),
             ],
           ),
-          SizedBox(height: 20),
+          SizedBox(height: 10),
 
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (selectedTaskApprovalType != null && selectedTaskApprovalType == '1')
-                Expanded(
-                  flex: 1,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'On Completion of task, Automatically Start',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 0),
-                      if (autoStartTask != null && autoStartTask is Map && autoStartTask.isNotEmpty)
+              if (selectedApprovalRequired != null && selectedApprovalRequired == '1' && selectedTaskCompletionType != 'Manual')
+                if (autoStartTask != null && autoStartTask is Map && autoStartTask.isNotEmpty)
+                  Expanded(
+                    flex: 1,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'On Completion of task, Automatically Start',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 0),
                         DropdownButton<String>(
                           value: autoStartTask.containsKey(selectedNextTask)
                               ? selectedNextTask
@@ -2052,7 +2410,7 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                               child: Text(label),
                             );
                           }).toList(),
-                          onChanged: (String? newValue) {
+                          onChanged: taskDetails['taskStatus'] == "8" ? null : (String? newValue) {
                             setState(() {
                               selectedNextTask = newValue;
                               currentEditingField = 'nextTask';
@@ -2063,13 +2421,12 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                           hint: Text('--Select a Next Task--'),
                           isExpanded: true,
                         ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
             ],
           ),
-          SizedBox(height: 20),
-
+          SizedBox(height: 10),
           /*Row(
             children: [
               Expanded(child: Column()),
@@ -2079,6 +2436,218 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
             ],
           ),*/
         ],
+      ),
+    );
+  }
+
+  Widget buildApprovalHistory() {
+    if (taskCodelists == null) {
+      return Center(child: CircularProgressIndicator());
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (_approvalHistory.isNotEmpty)
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Text(
+                      //   'Approval History',
+                      //   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      // ),
+                      SizedBox(height: 10),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.vertical,
+                        child: Table(
+                          border: TableBorder.all(color: Colors.grey),
+                          columnWidths: const <int, TableColumnWidth>{
+                            0: FlexColumnWidth(5),
+                            1: FlexColumnWidth(5),
+                            2: FlexColumnWidth(5),
+                            3: FlexColumnWidth(5),
+                            4: FlexColumnWidth(5),
+                            5: FlexColumnWidth(5),
+                          },
+                          children: [
+                            TableRow(
+                              decoration: BoxDecoration(color: Colors.grey[200]),
+                              children: [
+                                _buildTableHeader('Submitted By'),
+                                _buildTableHeader('Date'),
+                                _buildTableHeader('Approver'),
+                                _buildTableHeader('Approval Status'),
+                                _buildTableHeader('Comments'),
+                                _buildTableHeader('Approval Date'),
+                              ],
+                            ),
+                            ..._approvalHistory.map((entry) {
+                              return TableRow(
+                                children: [
+                                  _buildTableCell(entry.proposer ?? 'N/A'),
+                                  _buildTableCell(entry.submittedDate ?? 'N/A'),
+                                  _buildTableCell(entry.approver ?? 'N/A'),
+                                  _buildTableCell(entry.status ?? 'N/A'),
+                                  _buildTableCell(entry.comments ?? 'N/A'),
+                                  _buildTableCell(entry.approvalDate ?? 'N/A'),
+                                ],
+                              );
+                            }).toList(),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Text('No approval history available'),
+              SizedBox(height: 20),
+            ],
+          ),
+          SizedBox(height: 20),
+
+          if (_isApprover && _isApprovalPending())
+            Row(
+              children: [
+                // Comments Section
+                Expanded(
+                  child: Card(
+                    elevation: 5,  // Shadow effect for the card
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),  // Rounded corners
+                    ),
+                    color: Colors.white,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),  // Padding inside the card
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.check_circle,  // Icon before the text (you can change this)
+                                color: Colors.black,
+                                size: 18,// Icon color
+                              ),
+                              SizedBox(width: 4),  // Space between the icon and text
+                              Text(
+                                'Approval',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 10),
+                          TextField(
+                            focusNode: commentsNameFocusNode,
+                            controller: commentsController,
+                            decoration: InputDecoration(
+                              hintText: 'comments',
+                              border: OutlineInputBorder(),
+                            ),
+                            maxLines: 3,
+                          ),
+                          SizedBox(height: 20),
+                          Row(
+                            children: [
+                              ElevatedButton(
+                                onPressed: () {
+                                  // Logic for Approve button
+                                  _onApproveButtonClicked(commentsController.text);
+
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blue,  // Background color
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(1),  // Border radius for rounded corners
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center, // Center the content
+                                  children: [
+                                    Icon(
+                                      Icons.check_circle,  // Icon for the Approve button
+                                      color: Colors.white,  // Icon color
+                                    ),
+                                    SizedBox(width: 5),  // Space between the icon and the text
+                                    Text(
+                                      'Approve',
+                                      style: TextStyle(
+                                        color: Colors.white,  // Text color
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(width: 10),
+                              ElevatedButton(
+                                onPressed: () {
+                                  // FocusScope.of(context).unfocus();
+                                  if (!_isCommentsFieldFocused) {
+                                    _isCommentsFieldFocused = true;
+                                    commentsNameFocusNode.unfocus();
+                                    _setupKeyboardAutoClose(); // Start the timer for this field
+                                  }
+                                  _showApprovalRejectDialog();
+                                },
+                                style: ElevatedButton.styleFrom(backgroundColor: Colors.white, shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(1),  // Border radius for rounded corners
+                                ),),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,  // Center the content
+                                  children: [
+                                    Icon(
+                                      Icons.cancel,  // Icon for the Reject button
+                                      color: Colors.blueAccent,  // Icon color
+                                    ),
+                                    SizedBox(width: 5),  // Space between the icon and the text
+                                    Text(
+                                      'Reject',
+                                      style: TextStyle(
+                                        color: Colors.blueAccent,  // Text color
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 20),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTableHeader(String text) {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: Text(
+        text,
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+      ),
+    );
+  }
+
+  Widget _buildTableCell(String text) {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 9), // Handle overflow
       ),
     );
   }
@@ -2640,7 +3209,6 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                                 children: [
                                   GestureDetector(
                                     onTap: () {
-                                      print('History icon tapped');
                                       setState(() {
                                         _attachments[index].isDocumentHistoryShown = false;
                                       });
@@ -2650,7 +3218,6 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                                   SizedBox(width: 8.0),
                                   GestureDetector(
                                     onTap: () {
-                                      print('History text tapped');
                                       setState(() {
                                         _attachments[index].isDocumentHistoryShown = false;
                                       });
@@ -2694,15 +3261,12 @@ class _PanelDetailsScreenState extends State<PanelDetailsScreen> {
                 onPressed: () async {
                   String url = attachment.url ?? '';
                   if (url.isNotEmpty) {
-                    print('url $url');
                     if (await canLaunchUrl(Uri.parse(url))) {
                       await launchUrl(Uri.parse(url));
                     } else {
                     print("Could not launch URL: $url");
                     }
                   }
-                  // Implement opening link logic if needed
-                  print("Opening link: ${attachment.url}");
                 },
               ),
             ),
